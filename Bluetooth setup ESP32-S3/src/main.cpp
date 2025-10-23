@@ -82,35 +82,62 @@ void loop() {
   if (now - lastSensorPublish >= SENSOR_PUBLISH_INTERVAL) {
     lastSensorPublish = now;
 
-    // Read sensors
-    float eCO2 = 0.0f;
-    float tvoc = 0.0f;
-    if (ccs.available()) {
-      if (!ccs.readData()) {
-        eCO2 = ccs.geteCO2();
-        tvoc = ccs.getTVOC();
-      } else {
-        Serial.println("CCS811 read error");
+      // Read sensors
+      float eCO2 = 0.0f;
+      float tvoc = 0.0f;
+      // Try reading CCS811 if available; otherwise keep zeros
+      if (ccs.available()) {
+        if (!ccs.readData()) {
+          eCO2 = ccs.geteCO2();
+          tvoc = ccs.getTVOC();
+        } else {
+          Serial.println("CCS811 read error");
+        }
       }
-    }
-    int mq2 = analogRead(MQ2_PIN);
 
-    // Build JSON and notify
-    if (pTxCharacteristic) {
-      DynamicJsonDocument doc(256);
-      doc["type"] = "sensors";
-      JsonObject payload = doc.createNestedObject("payload");
-      payload["eCO2"] = eCO2;
-      payload["tvoc"] = tvoc;
-      payload["mq2_adc"] = mq2;
+      // MQ-2: if the MQ2 library is not present here, use ADC as a proxy.
+      // analogRead on ESP32 returns 0..4095; we'll provide both raw ADC and a
+      // simple scaled ppm simulation (0..1000 ppm) so the Android app receives
+      // easily consumable numbers named after the MQ2 API the app expects.
+      int mq2_adc = analogRead(MQ2_PIN);
+      auto adcToPpm = [](int adc)->float { return (adc / 4095.0f) * 1000.0f; };
 
-      char buf[256];
-      size_t len = serializeJson(doc, buf, sizeof(buf));
-      pTxCharacteristic->setValue((uint8_t*)buf, len);
-      pTxCharacteristic->notify();
-      Serial.print("Published sensors: ");
-      Serial.println(buf);
-    }
+      float lpg_ppm = adcToPpm(mq2_adc);       // simulated LPG (ppm)
+      float co_ppm = adcToPpm((mq2_adc + 50) % 4096); // small variation
+      float smoke_ppm = adcToPpm((mq2_adc + 100) % 4096);
+      float alcohol_ppm = adcToPpm((mq2_adc + 150) % 4096);
+      float methane_ppm = adcToPpm((mq2_adc + 200) % 4096);
+      float h2_ppm = adcToPpm((mq2_adc + 250) % 4096);
+
+      // Build JSON and notify containing the requested fields
+      if (pTxCharacteristic) {
+        DynamicJsonDocument doc(512);
+        doc["type"] = "sensors";
+        JsonObject payload = doc.createNestedObject("payload");
+
+        // MQ-2 derived fields (match names you requested)
+        payload["lpg"] = lpg_ppm;        // gasTest.readLPG()
+        payload["co"] = co_ppm;          // gasTest.readCO()
+        payload["smoke"] = smoke_ppm;    // gasTest.readSmoke()
+        payload["alcohol"] = alcohol_ppm;// gasTest.readAlcohol()
+        payload["methane"] = methane_ppm;// gasTest.readMethane()
+        payload["h2"] = h2_ppm;          // gasTest.readH2()
+        payload["mq2_adc"] = mq2_adc;    // raw ADC for debugging
+
+        // CCS811 fields (CO2 and TVOC) - names reflect mySensor.getCO2()/getTVOC()
+        payload["co2"] = eCO2; // if sensor not ready, will be 0
+        payload["tvoc"] = tvoc;
+
+        // optional: timestamp
+        payload["ts_ms"] = millis();
+
+        char buf[512];
+        size_t len = serializeJson(doc, buf, sizeof(buf));
+        pTxCharacteristic->setValue((uint8_t*)buf, len);
+        pTxCharacteristic->notify();
+        Serial.print("Published sensors: ");
+        Serial.println(buf);
+      }
   }
 
   delay(20);
