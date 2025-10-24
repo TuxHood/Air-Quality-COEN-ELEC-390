@@ -33,12 +33,14 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.example.ui_coen390.databinding.ActivityMainBinding;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
@@ -52,10 +54,11 @@ public class MainActivity extends AppCompatActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean scanning;
     private static final long SCAN_PERIOD = 10000;
-    //IMPORTANT REPLACE MAC ADDRESS WITH YOUR DEVICE
-    private static final String DEVICE_ADDRESS = "CC:BA:97:14:1E:E9"; // Replace with your ESP32 MAC address
 
-    // UUIDs for the service and characteristic
+    // IMPORTANT: replace with your device MAC if needed
+    private static final String DEVICE_ADDRESS = "CC:BA:97:14:1E:E9";
+
+    // UUIDs for service/characteristic (update if needed)
     private static final UUID SERVICE_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
     private static final UUID CHARACTERISTIC_UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E");
 
@@ -64,12 +67,60 @@ public class MainActivity extends AppCompatActivity {
     private Button connectButton;
     private DatabaseHelper myDb;
 
+    // --- Mock/demo mode: run the app without any Bluetooth hardware ---
+    private static final boolean MOCK_MODE = true;
+
+    private final Runnable mockUpdater = new Runnable() {
+        @Override public void run() {
+            // Generate simple fake values
+            float co2  = 350 + (float)(Math.random() * 300);  // ppm
+            float tvoc =  2  + (float)(Math.random() * 40);   // ppb
+
+            runOnUiThread(() -> {
+                co2TextView.setText(String.format(Locale.US, "%.0f ppm", co2));
+                tvocTextView.setText(String.format(Locale.US, "%.0f ppb", tvoc));
+            });
+
+            // Save latest values for the Stats screen (in-scope variables)
+            getSharedPreferences("stats", MODE_PRIVATE).edit()
+                    .putFloat("co2", co2)
+                    .putFloat("tvoc", tvoc)
+                    .putFloat("aqi", calcSimpleIndex(co2, tvoc))
+                    .apply();
+
+            handler.postDelayed(this, 2000); // update every 2 seconds
+        }
+    };
+
+    private void startMockMode() {
+        runOnUiThread(() -> {
+            co2TextView.setText("Connecting...");
+            tvocTextView.setText("Connecting...");
+            connectButton.setEnabled(false);
+        });
+        handler.postDelayed(() -> {
+            connectButton.setEnabled(true);
+            connectButton.setText("Demo Running");
+            mockUpdater.run(); // start periodic fake data
+        }, 800);
+    }
+
+    private float calcSimpleIndex(float co2, float tvoc) {
+        // Simple placeholder for demo (0–500-ish)
+        float co2Score  = Math.min(500f, co2 / 2f);  // e.g., 1000 ppm -> 500
+        float tvocScore = Math.min(500f, tvoc * 5f); // e.g., 100 ppb -> 500
+        return Math.max(co2Score, tvocScore);
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        MaterialToolbar toolbar = findViewById(R.id.topAppBar);
+        setSupportActionBar(toolbar);
 
         myDb = new DatabaseHelper(this);
         co2TextView = findViewById(R.id.CO2TextView);
@@ -79,18 +130,27 @@ public class MainActivity extends AppCompatActivity {
         co2TextView.setText(R.string.status_disconnected);
         tvocTextView.setText(R.string.status_disconnected);
 
-        final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        final BluetoothManager bluetoothManager =
+                (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         bluetoothAdapter = bluetoothManager.getAdapter();
 
         if (bluetoothAdapter == null) {
             Toast.makeText(this, "Bluetooth not supported on this device", Toast.LENGTH_SHORT).show();
             finish();
+            return;
         }
 
-        connectButton.setOnClickListener(v -> {
-            Log.d(TAG, "Connect button pressed.");
-            handleConnectionRequest();
-        });
+        if (MOCK_MODE) {
+            connectButton.setOnClickListener(v -> {
+                Log.d(TAG, "Demo mode: skipping BLE, starting fake updates.");
+                startMockMode();
+            });
+        } else {
+            connectButton.setOnClickListener(v -> {
+                Log.d(TAG, "Connect button pressed.");
+                handleConnectionRequest();  // real BLE path
+            });
+        }
     }
 
     private void handleConnectionRequest() {
@@ -107,7 +167,8 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean isLocationEnabled() {
         LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
     }
 
     private boolean checkAndRequestPermissions() {
@@ -153,16 +214,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startScan() {
+        if (MOCK_MODE) return;  // mock guard
+
         if (!checkAndRequestPermissions()) {
-             Log.w(TAG, "startScan called without all necessary permissions.");
-            return; // Exit if permissions are not (or not yet) granted.
+            Log.w(TAG, "startScan called without all necessary permissions.");
+            return;
         }
 
         bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
         if (!scanning) {
             Log.d(TAG, "Starting BLE scan...");
             handler.postDelayed(() -> {
-                if(scanning) {
+                if (scanning) {
                     scanning = false;
                     //noinspection MissingPermission
                     bluetoothLeScanner.stopScan(leScanCallback);
@@ -177,6 +240,17 @@ public class MainActivity extends AppCompatActivity {
             //noinspection MissingPermission
             bluetoothLeScanner.stopScan(leScanCallback);
             Log.d(TAG, "Scan stopped manually.");
+        }
+    }
+
+    private void stopScan() {
+        if (MOCK_MODE) return;  // mock guard
+
+        if (scanning) {
+            //noinspection MissingPermission
+            bluetoothLeScanner.stopScan(leScanCallback);
+            scanning = false;
+            Log.d(TAG, "Scan stopped.");
         }
     }
 
@@ -202,15 +276,6 @@ public class MainActivity extends AppCompatActivity {
         bluetoothGatt = device.connectGatt(this, false, gattCallback);
     }
 
-    private void stopScan() {
-        if (scanning) {
-            //noinspection MissingPermission
-            bluetoothLeScanner.stopScan(leScanCallback);
-            scanning = false;
-            Log.d(TAG, "Scan stopped.");
-        }
-    }
-
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
@@ -219,7 +284,6 @@ public class MainActivity extends AppCompatActivity {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     Log.i(TAG, "Successfully connected to " + deviceAddress);
-
                     runOnUiThread(() -> {
                         connectButton.setText(R.string.status_connected);
                         connectButton.setEnabled(false);
@@ -252,10 +316,10 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "Services discovered successfully.");
                 BluetoothGattService service = gatt.getService(SERVICE_UUID);
                 if (service != null) {
-                    Log.d(TAG, "Service found: " + service.getUuid().toString());
+                    Log.d(TAG, "Service found: " + service.getUuid());
                     BluetoothGattCharacteristic characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
                     if (characteristic != null) {
-                        Log.d(TAG, "Characteristic found: " + characteristic.getUuid().toString());
+                        Log.d(TAG, "Characteristic found: " + characteristic.getUuid());
                         //noinspection MissingPermission
                         gatt.setCharacteristicNotification(characteristic, true);
                         UUID cccdUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
@@ -265,7 +329,7 @@ public class MainActivity extends AppCompatActivity {
                         //noinspection deprecation, MissingPermission
                         gatt.writeDescriptor(descriptor);
                     } else {
-                        Log.e(TAG, "Characteristic not found: " + CHARACTERISTIC_UUID.toString());
+                        Log.e(TAG, "Characteristic not found: " + CHARACTERISTIC_UUID);
                     }
                 } else {
                     Log.e(TAG, "Service not found. Status: " + status);
@@ -314,6 +378,13 @@ public class MainActivity extends AppCompatActivity {
                     Log.w(TAG, "Failed to insert data into DB");
                 }
 
+                // Save latest for Stats screen in real BLE mode too
+                getSharedPreferences("stats", MODE_PRIVATE).edit()
+                        .putFloat("co2", co2)
+                        .putFloat("tvoc", tvoc)
+                        .putFloat("aqi", calcSimpleIndex(co2, tvoc))
+                        .apply();
+
                 runOnUiThread(() -> {
                     co2TextView.setText(String.valueOf(co2));
                     tvocTextView.setText(String.valueOf(tvoc));
@@ -360,6 +431,13 @@ public class MainActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
         if (id == R.id.action_settings) {
+            startActivity(new Intent(this, SettingsActivity.class));
+            return true;
+        } else if (id == R.id.action_statistics) {
+            startActivity(new Intent(this, StatsActivity.class));  //fix: go to Stats
+            return true;
+        } else if (id == R.id.action_home) {
+            // Already on Home (MainActivity). Do nothing or refresh if you want.
             return true;
         }
         return super.onOptionsItemSelected(item);
