@@ -70,8 +70,8 @@ public class MainActivity extends AppCompatActivity {
     private DatabaseHelper myDb;
 
     //****** Mock/demo mode: run the app without any Bluetooth hardware **************************************************************************
-    private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
-    //private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
+    //private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
+    private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
 
     private final Runnable mockUpdater = new Runnable() {
         @Override public void run() {
