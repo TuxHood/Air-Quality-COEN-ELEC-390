@@ -34,6 +34,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.example.ui_coen390.databinding.ActivityMainBinding;
 import com.google.android.material.appbar.MaterialToolbar;
 
@@ -55,11 +56,11 @@ public class MainActivity extends AppCompatActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean scanning;
     private static final long SCAN_PERIOD = 10000;
+  
     //IMPORTANT REPLACE MAC ADDRESS WITH YOUR DEVICE
     private static final String DEVICE_ADDRESS = "e8:6b:ea:c9:ed:e2";
-    
 
-    // UUIDs for the service and characteristic
+    // UUIDs for service/characteristic (update if needed)
     private static final UUID SERVICE_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
     private static final UUID CHARACTERISTIC_UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E");
 
@@ -139,12 +140,14 @@ public class MainActivity extends AppCompatActivity {
         tvocTextView.setText(R.string.status_disconnected);
         indexTextView.setText(R.string.status_disconnected);
 
-        final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        final BluetoothManager bluetoothManager =
+                (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         bluetoothAdapter = bluetoothManager.getAdapter();
 
         if (bluetoothAdapter == null) {
             Toast.makeText(this, "Bluetooth not supported on this device", Toast.LENGTH_SHORT).show();
             finish();
+            return;
         }
 
         if (MOCK_MODE) {
@@ -174,7 +177,8 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean isLocationEnabled() {
         LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
     }
 
     private boolean checkAndRequestPermissions() {
@@ -220,16 +224,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startScan() {
+        if (MOCK_MODE) return;  // mock guard
+
         if (!checkAndRequestPermissions()) {
-             Log.w(TAG, "startScan called without all necessary permissions.");
-            return; // Exit if permissions are not (or not yet) granted.
+            Log.w(TAG, "startScan called without all necessary permissions.");
+            return;
         }
 
         bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
         if (!scanning) {
             Log.d(TAG, "Starting BLE scan...");
             handler.postDelayed(() -> {
-                if(scanning) {
+                if (scanning) {
                     scanning = false;
                     //noinspection MissingPermission
                     bluetoothLeScanner.stopScan(leScanCallback);
@@ -244,6 +250,17 @@ public class MainActivity extends AppCompatActivity {
             //noinspection MissingPermission
             bluetoothLeScanner.stopScan(leScanCallback);
             Log.d(TAG, "Scan stopped manually.");
+        }
+    }
+
+    private void stopScan() {
+        if (MOCK_MODE) return;  // mock guard
+
+        if (scanning) {
+            //noinspection MissingPermission
+            bluetoothLeScanner.stopScan(leScanCallback);
+            scanning = false;
+            Log.d(TAG, "Scan stopped.");
         }
     }
 
@@ -336,10 +353,10 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "Services discovered successfully.");
                 BluetoothGattService service = gatt.getService(SERVICE_UUID);
                 if (service != null) {
-                    Log.d(TAG, "Service found: " + service.getUuid().toString());
+                    Log.d(TAG, "Service found: " + service.getUuid());
                     BluetoothGattCharacteristic characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
                     if (characteristic != null) {
-                        Log.d(TAG, "Characteristic found: " + characteristic.getUuid().toString());
+                        Log.d(TAG, "Characteristic found: " + characteristic.getUuid());
                         //noinspection MissingPermission
                         gatt.setCharacteristicNotification(characteristic, true);
                         UUID cccdUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
@@ -349,7 +366,7 @@ public class MainActivity extends AppCompatActivity {
                         //noinspection deprecation, MissingPermission
                         gatt.writeDescriptor(descriptor);
                     } else {
-                        Log.e(TAG, "Characteristic not found: " + CHARACTERISTIC_UUID.toString());
+                        Log.e(TAG, "Characteristic not found: " + CHARACTERISTIC_UUID);
                     }
                 } else {
                     Log.e(TAG, "Service not found. Status: " + status);
@@ -400,6 +417,13 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     Log.w(TAG, "Failed to insert data into DB");
                 }
+
+                // Save latest for Stats screen in real BLE mode too
+                getSharedPreferences("stats", MODE_PRIVATE).edit()
+                        .putFloat("co2", co2)
+                        .putFloat("tvoc", tvoc)
+                        .putFloat("aqi", calcSimpleIndex(co2, tvoc))
+                        .apply();
 
                 runOnUiThread(() -> {
                     co2TextView.setText(String.format("%.2f ppm", co2)); // Format the output nicely
