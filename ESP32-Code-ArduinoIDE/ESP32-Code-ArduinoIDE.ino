@@ -117,11 +117,14 @@ void loop() {
 
         // Copy floats to a byte buffer. ESP32 is little-endian, and Android
         // code expects LITTLE_ENDIAN, so a direct memcpy is fine.
-        uint8_t outbuf[8 * sizeof(float)];
-        memcpy(outbuf, values, sizeof(outbuf));
+
+        
+        //uint8_t outbuf[8 * sizeof(float)];
+        //memcpy(outbuf, values, sizeof(outbuf));
+        std::string txValue((char*)values, 32); // Create a string from our float array, 32 bytes long.
 
         // Send raw bytes over BLE
-        pTxCharacteristic->setValue(outbuf, sizeof(outbuf));
+        pTxCharacteristic->setValue(txValue);
         pTxCharacteristic->notify();
 
         // Debug print: show values in readable form
