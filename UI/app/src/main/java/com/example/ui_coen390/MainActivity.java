@@ -35,11 +35,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import com.example.ui_coen390.databinding.ActivityMainBinding;
+import com.google.android.material.appbar.MaterialToolbar;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
@@ -63,8 +65,59 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView co2TextView;
     private TextView tvocTextView;
+    private TextView indexTextView;
     private Button connectButton;
     private DatabaseHelper myDb;
+
+    //****** Mock/demo mode: run the app without any Bluetooth hardware **************************************************************************
+    private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
+    //private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
+
+    private final Runnable mockUpdater = new Runnable() {
+        @Override public void run() {
+            // Generate simple fake values
+            float co2  = 350 + (float)(Math.random() * 300);  // ppm
+            float tvoc =  2  + (float)(Math.random() * 40);   // ppb
+            float aqi = calcSimpleIndex(co2, tvoc);
+
+            runOnUiThread(() -> {
+                co2TextView.setText(String.format(Locale.US, "%.0f ppm", co2));
+                tvocTextView.setText(String.format(Locale.US, "%.0f ppb", tvoc));
+                indexTextView.setText(String.format(Locale.US, "%.0f ppb", aqi));
+            });
+
+            // Save latest values for the Stats screen (in-scope variables)
+            getSharedPreferences("stats", MODE_PRIVATE).edit()
+                    .putFloat("co2", co2)
+                    .putFloat("tvoc", tvoc)
+                    .putFloat("aqi", calcSimpleIndex(co2, tvoc))
+                    .apply();
+
+            handler.postDelayed(this, 2000); // update every 2 seconds
+        }
+    };
+
+    private void startMockMode() {
+        runOnUiThread(() -> {
+            co2TextView.setText("Connecting...");
+            tvocTextView.setText("Connecting...");
+            indexTextView.setText("Connecting...");
+            connectButton.setEnabled(false);
+        });
+        handler.postDelayed(() -> {
+            connectButton.setEnabled(true);
+            connectButton.setText("Demo Running");
+            mockUpdater.run(); // start periodic fake data
+        }, 800);
+    }
+
+    private float calcSimpleIndex(float co2, float tvoc) {
+        // Simple placeholder for demo (0–500-ish)
+        float co2Score  = Math.min(500f, co2 / 2f);  // e.g., 1000 ppm -> 500
+        float tvocScore = Math.min(500f, tvoc * 5f); // e.g., 100 ppb -> 500
+        return Math.max(co2Score, tvocScore);
+    }
+    //*******************************************************************************************************************************************
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,13 +126,18 @@ public class MainActivity extends AppCompatActivity {
         ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        MaterialToolbar toolbar = findViewById(R.id.topAppBar);
+        setSupportActionBar(toolbar);
+
         myDb = new DatabaseHelper(this);
         co2TextView = findViewById(R.id.CO2TextView);
         tvocTextView = findViewById(R.id.TVOCTextView);
+        indexTextView = findViewById(R.id.indexTextView);
         connectButton = findViewById(R.id.homeButton); // Using homeButton as connect button
 
         co2TextView.setText(R.string.status_disconnected);
         tvocTextView.setText(R.string.status_disconnected);
+        indexTextView.setText(R.string.status_disconnected);
 
         final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         bluetoothAdapter = bluetoothManager.getAdapter();
@@ -89,10 +147,17 @@ public class MainActivity extends AppCompatActivity {
             finish();
         }
 
-        connectButton.setOnClickListener(v -> {
-            Log.d(TAG, "Connect button pressed.");
-            handleConnectionRequest();
-        });
+        if (MOCK_MODE) {
+            connectButton.setOnClickListener(v -> {
+                Log.d(TAG, "Demo mode: skipping BLE, starting fake updates.");
+                startMockMode();
+            });
+        } else {
+            connectButton.setOnClickListener(v -> {
+                Log.d(TAG, "Connect button pressed.");
+                handleConnectionRequest();  // real BLE path
+            });
+        }
     }
 
     private void handleConnectionRequest() {
@@ -238,6 +303,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         co2TextView.setText(R.string.status_disconnected);
                         tvocTextView.setText(R.string.status_disconnected);
+                        indexTextView.setText(R.string.status_disconnected);
                         connectButton.setText(R.string.status_connect);
                         connectButton.setEnabled(true);
                     });
@@ -247,6 +313,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     co2TextView.setText(R.string.status_disconnected);
                     tvocTextView.setText(R.string.status_disconnected);
+                    indexTextView.setText(R.string.status_disconnected);
                     connectButton.setText(R.string.status_connect);
                     connectButton.setEnabled(true);
                 });
@@ -324,9 +391,10 @@ public class MainActivity extends AppCompatActivity {
                 float alcohol = buffer.getFloat();
                 float methane = buffer.getFloat();
                 float h2 = buffer.getFloat();
+                float aqi = buffer.getFloat();
 
                 long timestamp = System.currentTimeMillis() / 1000;
-                boolean isInserted = myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2);
+                boolean isInserted = myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
                 if (isInserted) {
                     Log.d(TAG, "Data Inserted into DB");
                 } else {
@@ -336,12 +404,14 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     co2TextView.setText(String.format("%.2f ppm", co2)); // Format the output nicely
                     tvocTextView.setText(String.format("%.2f ppb", tvoc)); // Format the output nicely
+                    indexTextView.setText(String.format("%.2f ", aqi));
                 });
             } else {
                 Log.w(TAG, "Received malformed data packet. Length: " + (data != null ? data.length : 0));
                 runOnUiThread(() -> {
                     co2TextView.setText(R.string.status_error);
                     tvocTextView.setText(R.string.status_error);
+                    indexTextView.setText(R.string.status_error);
                 });
             }
         }
@@ -379,6 +449,13 @@ public class MainActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
         if (id == R.id.action_settings) {
+            startActivity(new Intent(this, SettingsActivity.class));
+            return true;
+        } else if (id == R.id.action_statistics) {
+            startActivity(new Intent(this, StatsActivity.class));  //fix: go to Stats
+            return true;
+        } else if (id == R.id.action_home) {
+            // Already on Home (MainActivity). Do nothing or refresh if you want.
             return true;
         }
         return super.onOptionsItemSelected(item);
