@@ -66,7 +66,14 @@ Serial.println("-----------------------------------------------");
   Serial.println(NimBLEDevice::getAddress().toString().c_str());
   Serial.println("Subscribe to the TX characteristic to receive sensor data.");
 }
-
+float calcSimpleIndex(float co2, float tvoc) {
+    
+    // to calculate air quiality index like the method
+    //in calcSimpleIndex in MainActivity 
+    float co2Score  = min(500.0f, co2 / 2.0f);
+    float tvocScore = min(500.0f, tvoc * 5.0f);
+    return max(co2Score, tvocScore);
+}
 void loop() {
   unsigned long now = millis();
   if (now - lastSensorPublish >= SENSOR_PUBLISH_INTERVAL) {
@@ -91,6 +98,7 @@ void loop() {
       float alcohol_ppm = 0.0f;
       float methane_ppm = 0.0f;
       float h2_ppm = 0.0f;
+      float aqi=0.0f;
       // Attempt to read from MQ2 library instance `gasTest`. If those methods
       // are not available at runtime, they will likely return 0 — keep the
       // ADC value as a fallback for debugging.
@@ -100,12 +108,13 @@ void loop() {
       alcohol_ppm = gasTest.readAlcohol();
       methane_ppm = gasTest.readMethane();
       h2_ppm = gasTest.readH2();
+      aqi = calcSimpleIndex(eCO2, tvoc);
 
       // Build raw float array (8 floats = 32 bytes) in LITTLE_ENDIAN order
       // Order chosen to match Android client's expectation: co2, tvoc,
       // lpg, co, smoke, alcohol, methane, h2
       if (pTxCharacteristic) {
-        float values[8];
+        float values[9];
         values[0] = eCO2;         // mySensor.getCO2()
         values[1] = tvoc;         // mySensor.getTVOC()
         values[2] = lpg_ppm;      // gasTest.readLPG()
@@ -114,16 +123,17 @@ void loop() {
         values[5] = alcohol_ppm;  // gasTest.readAlcohol()
         values[6] = methane_ppm;  // gasTest.readMethane()
         values[7] = h2_ppm;       // gasTest.readH2()
+        values[8]=aqi;//air quality index
 
         // Copy floats to a byte buffer. ESP32 is little-endian, and Android
         // code expects LITTLE_ENDIAN, so a direct memcpy is fine.
 
-        
+
         //uint8_t outbuf[8 * sizeof(float)];
         //memcpy(outbuf, values, sizeof(outbuf));
-        std::string txValue((char*)values, 32); // Create a string from our float array, 32 bytes long.
+        std::string txValue((char*)values, 36); // Create a string from our float array, 32 bytes long.
 
-        // Send raw bytes over BLE
+        // Send string over BLE
         pTxCharacteristic->setValue(txValue);
         pTxCharacteristic->notify();
 
