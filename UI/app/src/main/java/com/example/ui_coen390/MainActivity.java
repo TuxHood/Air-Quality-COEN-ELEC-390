@@ -291,14 +291,6 @@ public class MainActivity extends AppCompatActivity {
         bluetoothGatt = device.connectGatt(this, false, gattCallback);
     }
 
-    private void stopScan() {
-        if (scanning) {
-            //noinspection MissingPermission
-            bluetoothLeScanner.stopScan(leScanCallback);
-            scanning = false;
-            Log.d(TAG, "Scan stopped.");
-        }
-    }
     @SuppressLint("MissingPermission")
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
         @Override
@@ -396,7 +388,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private void handleCharacteristicChanged(byte[] data) {
-            if (data != null && data.length == 32) { // 8 floats * 4 bytes/float
+            if (data != null && data.length == 36) { // 9 floats * 4 bytes/float
                 Log.d(TAG, "Received correct 32-byte data packet. Parsing...");
 
                 ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
