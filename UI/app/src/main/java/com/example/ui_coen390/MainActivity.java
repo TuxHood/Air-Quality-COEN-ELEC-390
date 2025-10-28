@@ -1,6 +1,7 @@
 package com.example.ui_coen390;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -35,6 +36,7 @@ import androidx.core.app.ActivityCompat;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.example.ui_coen390.databinding.ActivityMainBinding;
+import com.google.android.material.appbar.MaterialToolbar;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -54,9 +56,9 @@ public class MainActivity extends AppCompatActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean scanning;
     private static final long SCAN_PERIOD = 10000;
-
-    // IMPORTANT: replace with your device MAC if needed
-    private static final String DEVICE_ADDRESS = "CC:BA:97:14:1E:E9";
+  
+    //IMPORTANT REPLACE MAC ADDRESS WITH YOUR DEVICE
+    private static final String DEVICE_ADDRESS = "e8:6b:ea:c9:ed:e2";
 
     // UUIDs for service/characteristic (update if needed)
     private static final UUID SERVICE_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
@@ -64,21 +66,25 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView co2TextView;
     private TextView tvocTextView;
+    private TextView indexTextView;
     private Button connectButton;
     private DatabaseHelper myDb;
 
-    // --- Mock/demo mode: run the app without any Bluetooth hardware ---
-    private static final boolean MOCK_MODE = true;
+    //****** Mock/demo mode: run the app without any Bluetooth hardware **************************************************************************
+    //private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
+    private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
 
     private final Runnable mockUpdater = new Runnable() {
         @Override public void run() {
             // Generate simple fake values
             float co2  = 350 + (float)(Math.random() * 300);  // ppm
             float tvoc =  2  + (float)(Math.random() * 40);   // ppb
+            float aqi = calcSimpleIndex(co2, tvoc);
 
             runOnUiThread(() -> {
                 co2TextView.setText(String.format(Locale.US, "%.0f ppm", co2));
                 tvocTextView.setText(String.format(Locale.US, "%.0f ppb", tvoc));
+                indexTextView.setText(String.format(Locale.US, "%.0f ppb", aqi));
             });
 
             // Save latest values for the Stats screen (in-scope variables)
@@ -96,6 +102,7 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(() -> {
             co2TextView.setText("Connecting...");
             tvocTextView.setText("Connecting...");
+            indexTextView.setText("Connecting...");
             connectButton.setEnabled(false);
         });
         handler.postDelayed(() -> {
@@ -111,6 +118,7 @@ public class MainActivity extends AppCompatActivity {
         float tvocScore = Math.min(500f, tvoc * 5f); // e.g., 100 ppb -> 500
         return Math.max(co2Score, tvocScore);
     }
+    //*******************************************************************************************************************************************
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -125,10 +133,12 @@ public class MainActivity extends AppCompatActivity {
         myDb = new DatabaseHelper(this);
         co2TextView = findViewById(R.id.CO2TextView);
         tvocTextView = findViewById(R.id.TVOCTextView);
+        indexTextView = findViewById(R.id.indexTextView);
         connectButton = findViewById(R.id.homeButton); // Using homeButton as connect button
 
         co2TextView.setText(R.string.status_disconnected);
         tvocTextView.setText(R.string.status_disconnected);
+        indexTextView.setText(R.string.status_disconnected);
 
         final BluetoothManager bluetoothManager =
                 (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
@@ -262,8 +272,13 @@ public class MainActivity extends AppCompatActivity {
             //noinspection MissingPermission
             Log.d(TAG, "Device found: " + device.getName() + " with address: " + device.getAddress());
             //noinspection MissingPermission
-            if (DEVICE_ADDRESS.equals(device.getAddress())) {
+            if (DEVICE_ADDRESS.equalsIgnoreCase(device.getAddress())) {
                 Log.i(TAG, "Target device found! Address: " + device.getAddress());
+                scanning=false;
+                bluetoothLeScanner.stopScan(leScanCallback);
+
+                // Also cancel the 10-second timeout handler to prevent it from firing later
+                handler.removeCallbacksAndMessages(null);
                 connectDevice(device);
             }
         }
@@ -276,6 +291,7 @@ public class MainActivity extends AppCompatActivity {
         bluetoothGatt = device.connectGatt(this, false, gattCallback);
     }
 
+    @SuppressLint("MissingPermission")
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
@@ -284,6 +300,7 @@ public class MainActivity extends AppCompatActivity {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     Log.i(TAG, "Successfully connected to " + deviceAddress);
+                    gatt.requestMtu(517);//request biggest value
                     runOnUiThread(() -> {
                         connectButton.setText(R.string.status_connected);
                         connectButton.setEnabled(false);
@@ -295,6 +312,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         co2TextView.setText(R.string.status_disconnected);
                         tvocTextView.setText(R.string.status_disconnected);
+                        indexTextView.setText(R.string.status_disconnected);
                         connectButton.setText(R.string.status_connect);
                         connectButton.setEnabled(true);
                     });
@@ -304,12 +322,23 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     co2TextView.setText(R.string.status_disconnected);
                     tvocTextView.setText(R.string.status_disconnected);
+                    indexTextView.setText(R.string.status_disconnected);
                     connectButton.setText(R.string.status_connect);
                     connectButton.setEnabled(true);
                 });
             }
         }
-
+        //method to request bigger mtu to nimBLE to receive 32bit packet
+        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+            super.onMtuChanged(gatt, mtu, status);
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.i(TAG, "MTU changed successfully to: " + mtu);
+                // Now that the MTU is set, we can discover services.
+                gatt.discoverServices();
+            } else {
+                Log.w(TAG, "Failed to change MTU. Status: " + status);
+            }
+        }
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
@@ -359,7 +388,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private void handleCharacteristicChanged(byte[] data) {
-            if (data != null && data.length == 32) { // 8 floats * 4 bytes/float
+            if (data != null && data.length == 36) { // 9 floats * 4 bytes/float
+                Log.d(TAG, "Received correct 32-byte data packet. Parsing...");
+
                 ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
                 float co2 = buffer.getFloat();
                 float tvoc = buffer.getFloat();
@@ -369,9 +400,10 @@ public class MainActivity extends AppCompatActivity {
                 float alcohol = buffer.getFloat();
                 float methane = buffer.getFloat();
                 float h2 = buffer.getFloat();
+                float aqi = buffer.getFloat();
 
                 long timestamp = System.currentTimeMillis() / 1000;
-                boolean isInserted = myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2);
+                boolean isInserted = myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
                 if (isInserted) {
                     Log.d(TAG, "Data Inserted into DB");
                 } else {
@@ -386,14 +418,16 @@ public class MainActivity extends AppCompatActivity {
                         .apply();
 
                 runOnUiThread(() -> {
-                    co2TextView.setText(String.valueOf(co2));
-                    tvocTextView.setText(String.valueOf(tvoc));
+                    co2TextView.setText(String.format("%.2f ppm", co2)); // Format the output nicely
+                    tvocTextView.setText(String.format("%.2f ppb", tvoc)); // Format the output nicely
+                    indexTextView.setText(String.format("%.2f ", aqi));
                 });
             } else {
                 Log.w(TAG, "Received malformed data packet. Length: " + (data != null ? data.length : 0));
                 runOnUiThread(() -> {
                     co2TextView.setText(R.string.status_error);
                     tvocTextView.setText(R.string.status_error);
+                    indexTextView.setText(R.string.status_error);
                 });
             }
         }

@@ -18,6 +18,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_8 = "ALCOHOL";
     public static final String COL_9 = "METHANE";
     public static final String COL_10 = "H2";
+    public static final String COL_11 = "AQI";
 
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, 1);
@@ -34,7 +35,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         onCreate(db);
     }
 
-    public boolean insertData(long timestamp, float co2, float tvoc, float propane, float co, float smoke, float alcohol, float methane, float h2) {
+    public boolean insertData(long timestamp, float co2, float tvoc, float propane, float co, float smoke, float alcohol, float methane, float h2, float aqi) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues contentValues = new ContentValues();
         contentValues.put(COL_2, timestamp);
@@ -46,6 +47,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         contentValues.put(COL_8, alcohol);
         contentValues.put(COL_9, methane);
         contentValues.put(COL_10, h2);
+        contentValues.put(COL_11, aqi);
         long result = db.insert(TABLE_NAME, null, contentValues);
         return result != -1;
     }
