@@ -52,6 +52,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp" />
+
+                <com.jjoe64.graphview.GraphView
+                    android:id="@+id/graphAqi"
+                    android:layout_width="match_parent"
+                    android:layout_height="200dip" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -87,6 +92,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp" />
+
+                <com.jjoe64.graphview.GraphView
+                    android:id="@+id/graphCo2"
+                    android:layout_width="match_parent"
+                    android:layout_height="200dip" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -122,6 +132,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp" />
+
+                <com.jjoe64.graphview.GraphView
+                    android:id="@+id/graphTvoc"
+                    android:layout_width="match_parent"
+                    android:layout_height="200dip" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

@@ -7,8 +7,15 @@ import android.view.MenuItem;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
+import com.jjoe64.graphview.GraphView;
+import com.jjoe64.graphview.series.DataPoint;
+import com.jjoe64.graphview.series.LineGraphSeries;
+
+import java.util.Random;
 
 public class StatsActivity extends AppCompatActivity {
+
+    private GraphView graphAqi, graphCo2, graphTvoc;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -23,9 +30,43 @@ public class StatsActivity extends AppCompatActivity {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
 
+        graphAqi = findViewById(R.id.graphAqi);
+        graphCo2 = findViewById(R.id.graphCo2);
+        graphTvoc = findViewById(R.id.graphTvoc);
+
         // Initial populate (also done in onResume)
         updateFromPrefs();
+        setupGraphs();
     }
+
+    private void setupGraphs() {
+        // --- AQI Graph ---
+        LineGraphSeries<DataPoint> seriesAqi = new LineGraphSeries<>();
+        // Generate some dummy data
+        Random rnd = new Random();
+        for (int i = 0; i < 10; i++) {
+            seriesAqi.appendData(new DataPoint(i, 50 + rnd.nextInt(100)), true, 10);
+        }
+        graphAqi.addSeries(seriesAqi);
+        graphAqi.setTitle("AQI Over Time");
+
+        // --- CO2 Graph ---
+        LineGraphSeries<DataPoint> seriesCo2 = new LineGraphSeries<>();
+        for (int i = 0; i < 10; i++) {
+            seriesCo2.appendData(new DataPoint(i, 400 + rnd.nextInt(200)), true, 10);
+        }
+        graphCo2.addSeries(seriesCo2);
+        graphCo2.setTitle("CO2 Over Time");
+
+        // --- TVOC Graph ---
+        LineGraphSeries<DataPoint> seriesTvoc = new LineGraphSeries<>();
+        for (int i = 0; i < 10; i++) {
+            seriesTvoc.appendData(new DataPoint(i, 100 + rnd.nextInt(150)), true, 10);
+        }
+        graphTvoc.addSeries(seriesTvoc);
+        graphTvoc.setTitle("TVOC Over Time");
+    }
+
 
     @Override
     protected void onResume() {
