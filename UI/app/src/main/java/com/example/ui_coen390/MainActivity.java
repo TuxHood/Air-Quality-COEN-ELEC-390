@@ -36,7 +36,6 @@ import androidx.core.app.ActivityCompat;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.example.ui_coen390.databinding.ActivityMainBinding;
-import com.google.android.material.appbar.MaterialToolbar;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -56,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean scanning;
     private static final long SCAN_PERIOD = 10000;
-  
+
     //IMPORTANT REPLACE MAC ADDRESS WITH YOUR DEVICE
     private static final String DEVICE_ADDRESS = "e8:6b:ea:c9:ed:e2";
 
@@ -70,55 +69,7 @@ public class MainActivity extends AppCompatActivity {
     private Button connectButton;
     private DatabaseHelper myDb;
 
-    //****** Mock/demo mode: run the app without any Bluetooth hardware **************************************************************************
-    //private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
-    private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
-
-    private final Runnable mockUpdater = new Runnable() {
-        @Override public void run() {
-            // Generate simple fake values
-            float co2  = 350 + (float)(Math.random() * 300);  // ppm
-            float tvoc =  2  + (float)(Math.random() * 40);   // ppb
-            float aqi = calcSimpleIndex(co2, tvoc);
-
-            runOnUiThread(() -> {
-                co2TextView.setText(String.format(Locale.US, "%.0f ppm", co2));
-                tvocTextView.setText(String.format(Locale.US, "%.0f ppb", tvoc));
-                indexTextView.setText(String.format(Locale.US, "%.0f ppb", aqi));
-            });
-
-            // Save latest values for the Stats screen (in-scope variables)
-            getSharedPreferences("stats", MODE_PRIVATE).edit()
-                    .putFloat("co2", co2)
-                    .putFloat("tvoc", tvoc)
-                    .putFloat("aqi", calcSimpleIndex(co2, tvoc))
-                    .apply();
-
-            handler.postDelayed(this, 2000); // update every 2 seconds
-        }
-    };
-
-    private void startMockMode() {
-        runOnUiThread(() -> {
-            co2TextView.setText("Connecting...");
-            tvocTextView.setText("Connecting...");
-            indexTextView.setText("Connecting...");
-            connectButton.setEnabled(false);
-        });
-        handler.postDelayed(() -> {
-            connectButton.setEnabled(true);
-            connectButton.setText("Demo Running");
-            mockUpdater.run(); // start periodic fake data
-        }, 800);
-    }
-
-    private float calcSimpleIndex(float co2, float tvoc) {
-        // Simple placeholder for demo (0–500-ish)
-        float co2Score  = Math.min(500f, co2 / 2f);  // e.g., 1000 ppm -> 500
-        float tvocScore = Math.min(500f, tvoc * 5f); // e.g., 100 ppb -> 500
-        return Math.max(co2Score, tvocScore);
-    }
-    //*******************************************************************************************************************************************
+    private static final boolean MOCK_MODE = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -134,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
         co2TextView = findViewById(R.id.CO2TextView);
         tvocTextView = findViewById(R.id.TVOCTextView);
         indexTextView = findViewById(R.id.indexTextView);
-        connectButton = findViewById(R.id.homeButton); // Using homeButton as connect button
+        connectButton = findViewById(R.id.homeButton);
 
         co2TextView.setText(R.string.status_disconnected);
         tvocTextView.setText(R.string.status_disconnected);
@@ -150,20 +101,22 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        if (MOCK_MODE) {
-            connectButton.setOnClickListener(v -> {
+        connectButton.setOnClickListener(v -> {
+            Log.d(TAG, "Connect button pressed.");
+            if (MOCK_MODE) {
                 Log.d(TAG, "Demo mode: skipping BLE, starting fake updates.");
-                startMockMode();
-            });
-        } else {
-            connectButton.setOnClickListener(v -> {
-                Log.d(TAG, "Connect button pressed.");
+            } else {
                 handleConnectionRequest();  // real BLE path
-            });
-        }
+            }
+        });
     }
 
     private void handleConnectionRequest() {
+        if (!bluetoothAdapter.isEnabled()) {
+            Toast.makeText(this, "Please enable Bluetooth", Toast.LENGTH_LONG).show();
+            return;
+        }
+
         if (!isLocationEnabled()) {
             Toast.makeText(this, "Please enable Location Services for BLE scanning", Toast.LENGTH_LONG).show();
             Intent locationIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
@@ -215,7 +168,7 @@ public class MainActivity extends AppCompatActivity {
             }
             if (allGranted) {
                 Log.d(TAG, "All permissions granted. Starting scan.");
-                startScan();
+                handleConnectionRequest();
             } else {
                 Log.w(TAG, "Not all permissions were granted.");
                 Toast.makeText(this, "Permissions are required for BLE functionality.", Toast.LENGTH_LONG).show();
@@ -223,41 +176,46 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private void startScan() {
         if (MOCK_MODE) return;  // mock guard
 
-        if (!checkAndRequestPermissions()) {
-            Log.w(TAG, "startScan called without all necessary permissions.");
+        if (!bluetoothAdapter.isEnabled()) {
+            Toast.makeText(this, "Bluetooth is not enabled.", Toast.LENGTH_SHORT).show();
             return;
         }
 
         bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
+        if (bluetoothLeScanner == null) {
+            Log.e(TAG, "Failed to get BLE scanner, is Bluetooth enabled?");
+            Toast.makeText(this, "Could not start scan. Is Bluetooth on?", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+
         if (!scanning) {
             Log.d(TAG, "Starting BLE scan...");
             handler.postDelayed(() -> {
                 if (scanning) {
                     scanning = false;
-                    //noinspection MissingPermission
                     bluetoothLeScanner.stopScan(leScanCallback);
                     Log.d(TAG, "Scan stopped after timeout.");
                 }
             }, SCAN_PERIOD);
             scanning = true;
-            //noinspection MissingPermission
             bluetoothLeScanner.startScan(leScanCallback);
         } else {
             scanning = false;
-            //noinspection MissingPermission
             bluetoothLeScanner.stopScan(leScanCallback);
             Log.d(TAG, "Scan stopped manually.");
         }
     }
 
+    @SuppressLint("MissingPermission")
     private void stopScan() {
         if (MOCK_MODE) return;  // mock guard
 
-        if (scanning) {
-            //noinspection MissingPermission
+        if (scanning && bluetoothLeScanner != null) { // also check if scanner is not null
             bluetoothLeScanner.stopScan(leScanCallback);
             scanning = false;
             Log.d(TAG, "Scan stopped.");
@@ -265,17 +223,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private final ScanCallback leScanCallback = new ScanCallback() {
+        @SuppressLint("MissingPermission")
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
             super.onScanResult(callbackType, result);
             BluetoothDevice device = result.getDevice();
-            //noinspection MissingPermission
             Log.d(TAG, "Device found: " + device.getName() + " with address: " + device.getAddress());
-            //noinspection MissingPermission
             if (DEVICE_ADDRESS.equalsIgnoreCase(device.getAddress())) {
                 Log.i(TAG, "Target device found! Address: " + device.getAddress());
-                scanning=false;
-                bluetoothLeScanner.stopScan(leScanCallback);
+                if (bluetoothLeScanner != null) {
+                    scanning=false;
+                    bluetoothLeScanner.stopScan(leScanCallback);
+                }
 
                 // Also cancel the 10-second timeout handler to prevent it from firing later
                 handler.removeCallbacksAndMessages(null);
@@ -284,10 +243,10 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    @SuppressLint("MissingPermission")
     private void connectDevice(BluetoothDevice device) {
         Log.d(TAG, "Attempting to connect to device: " + device.getAddress());
         stopScan();
-        //noinspection MissingPermission
         bluetoothGatt = device.connectGatt(this, false, gattCallback);
     }
 
@@ -295,7 +254,6 @@ public class MainActivity extends AppCompatActivity {
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            //noinspection MissingPermission
             String deviceAddress = gatt.getDevice().getAddress();
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -305,7 +263,6 @@ public class MainActivity extends AppCompatActivity {
                         connectButton.setText(R.string.status_connected);
                         connectButton.setEnabled(false);
                     });
-                    //noinspection MissingPermission
                     gatt.discoverServices();
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     Log.i(TAG, "Successfully disconnected from " + deviceAddress);
@@ -349,14 +306,16 @@ public class MainActivity extends AppCompatActivity {
                     BluetoothGattCharacteristic characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
                     if (characteristic != null) {
                         Log.d(TAG, "Characteristic found: " + characteristic.getUuid());
-                        //noinspection MissingPermission
                         gatt.setCharacteristicNotification(characteristic, true);
                         UUID cccdUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
                         BluetoothGattDescriptor descriptor = characteristic.getDescriptor(cccdUuid);
-                        //noinspection deprecation, MissingPermission
-                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                        //noinspection deprecation, MissingPermission
-                        gatt.writeDescriptor(descriptor);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                        } else {
+                            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                            gatt.writeDescriptor(descriptor);
+                        }
+
                     } else {
                         Log.e(TAG, "Characteristic not found: " + CHARACTERISTIC_UUID);
                     }
@@ -383,7 +342,6 @@ public class MainActivity extends AppCompatActivity {
         @Override
         @SuppressWarnings("deprecation")
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            //noinspection deprecation
             handleCharacteristicChanged(characteristic.getValue());
         }
 
@@ -414,13 +372,13 @@ public class MainActivity extends AppCompatActivity {
                 getSharedPreferences("stats", MODE_PRIVATE).edit()
                         .putFloat("co2", co2)
                         .putFloat("tvoc", tvoc)
-                        .putFloat("aqi", calcSimpleIndex(co2, tvoc))
+                        .putFloat("aqi", aqi)
                         .apply();
 
                 runOnUiThread(() -> {
-                    co2TextView.setText(String.format("%.2f ppm", co2)); // Format the output nicely
-                    tvocTextView.setText(String.format("%.2f ppb", tvoc)); // Format the output nicely
-                    indexTextView.setText(String.format("%.2f ", aqi));
+                    co2TextView.setText(String.format(Locale.US, "%.2f ppm", co2)); // Format the output nicely
+                    tvocTextView.setText(String.format(Locale.US, "%.2f ppb", tvoc)); // Format the output nicely
+                    indexTextView.setText(String.format(Locale.US, "%.2f ", aqi));
                 });
             } else {
                 Log.w(TAG, "Received malformed data packet. Length: " + (data != null ? data.length : 0));
@@ -433,23 +391,22 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    @SuppressLint("MissingPermission")
     @Override
     protected void onPause() {
         super.onPause();
         stopScan();
         if (bluetoothGatt != null) {
-            //noinspection MissingPermission
             Log.d(TAG, "Disconnecting from GATT server.");
-            //noinspection MissingPermission
             bluetoothGatt.disconnect();
         }
     }
 
+    @SuppressLint("MissingPermission")
     @Override
     protected void onDestroy() {
         super.onDestroy();
         if (bluetoothGatt != null) {
-            //noinspection MissingPermission
             bluetoothGatt.close();
             bluetoothGatt = null;
         }

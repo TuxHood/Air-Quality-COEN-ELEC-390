@@ -1,21 +1,34 @@
 package com.example.ui_coen390;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.jjoe64.graphview.GraphView;
+import com.jjoe64.graphview.helper.DateAsXAxisLabelFormatter;
 import com.jjoe64.graphview.series.DataPoint;
 import com.jjoe64.graphview.series.LineGraphSeries;
 
-import java.util.Random;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public class StatsActivity extends AppCompatActivity {
 
-    private GraphView graphAqi, graphCo2, graphTvoc;
+    private LinearLayout graphsContainer;
+    private DatabaseHelper myDb;
+    private LayoutInflater inflater;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,68 +38,74 @@ public class StatsActivity extends AppCompatActivity {
         MaterialToolbar toolbar = findViewById(R.id.topAppBar);
         setSupportActionBar(toolbar);
 
-        // Up arrow (null-safe)
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
 
-        graphAqi = findViewById(R.id.graphAqi);
-        graphCo2 = findViewById(R.id.graphCo2);
-        graphTvoc = findViewById(R.id.graphTvoc);
+        myDb = new DatabaseHelper(this);
+        graphsContainer = findViewById(R.id.graphsContainer);
+        inflater = LayoutInflater.from(this);
 
-        // Initial populate (also done in onResume)
-        updateFromPrefs();
         setupGraphs();
     }
 
     private void setupGraphs() {
-        // --- AQI Graph ---
-        LineGraphSeries<DataPoint> seriesAqi = new LineGraphSeries<>();
-        // Generate some dummy data
-        Random rnd = new Random();
-        for (int i = 0; i < 10; i++) {
-            seriesAqi.appendData(new DataPoint(i, 50 + rnd.nextInt(100)), true, 10);
-        }
-        graphAqi.addSeries(seriesAqi);
-        graphAqi.setTitle("AQI Over Time");
+        List<String> pollutants = getPollutantsFromSettings();
+        graphsContainer.removeAllViews(); // Clear existing graphs
 
-        // --- CO2 Graph ---
-        LineGraphSeries<DataPoint> seriesCo2 = new LineGraphSeries<>();
-        for (int i = 0; i < 10; i++) {
-            seriesCo2.appendData(new DataPoint(i, 400 + rnd.nextInt(200)), true, 10);
-        }
-        graphCo2.addSeries(seriesCo2);
-        graphCo2.setTitle("CO2 Over Time");
+        for (String pollutant : pollutants) {
+            View graphCard = inflater.inflate(R.layout.graph_card_item, graphsContainer, false);
+            TextView graphTitle = graphCard.findViewById(R.id.graphTitle);
+            GraphView graphView = graphCard.findViewById(R.id.graphView);
 
-        // --- TVOC Graph ---
-        LineGraphSeries<DataPoint> seriesTvoc = new LineGraphSeries<>();
-        for (int i = 0; i < 10; i++) {
-            seriesTvoc.appendData(new DataPoint(i, 100 + rnd.nextInt(150)), true, 10);
+            graphTitle.setText(pollutant + " Over Time");
+            updateGraph(graphView, pollutant);
+
+            graphsContainer.addView(graphCard);
         }
-        graphTvoc.addSeries(seriesTvoc);
-        graphTvoc.setTitle("TVOC Over Time");
     }
 
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        updateFromPrefs();
+    private List<String> getPollutantsFromSettings() {
+        // TODO: Replace with actual implementation to get pollutants from settings
+        List<String> pollutants = new ArrayList<>();
+        pollutants.add("CO2");
+        pollutants.add("AQI");
+        pollutants.add("TVOC");
+        return pollutants;
     }
 
-    private void updateFromPrefs() {
-        android.content.SharedPreferences prefs = getSharedPreferences("stats", MODE_PRIVATE);
-        float co2  = prefs.getFloat("co2",  0f);
-        float tvoc = prefs.getFloat("tvoc", 0f);
-        float aqi  = prefs.getFloat("aqi",  0f);
+    private void updateGraph(GraphView graph, String pollutant) {
+        List<android.util.Pair<Long, Double>> data = myDb.getReadingsForPollutant(pollutant);
 
-        ((android.widget.TextView) findViewById(R.id.textCo2))
-                .setText(String.format(java.util.Locale.US, "%.0f ppm", co2));
-        ((android.widget.TextView) findViewById(R.id.textTvoc))
-                .setText(String.format(java.util.Locale.US, "%.0f ppb", tvoc));
-        ((android.widget.TextView) findViewById(R.id.textAqi))
-                .setText(String.format(java.util.Locale.US, "%.0f", aqi));
+        DataPoint[] dataPoints = new DataPoint[data.size()];
+        for (int i = 0; i < data.size(); i++) {
+            dataPoints[i] = new DataPoint(new Date(data.get(i).first * 1000), data.get(i).second);
+        }
+
+        LineGraphSeries<DataPoint> series = new LineGraphSeries<>(dataPoints);
+        graph.removeAllSeries();
+        graph.addSeries(series);
+
+        // styling
+        series.setColor(getResources().getColor(R.color.purple_500));
+        series.setDrawDataPoints(true);
+        series.setDataPointsRadius(10);
+        series.setThickness(8);
+
+        // X-axis date formatting
+        graph.getGridLabelRenderer().setLabelFormatter(new DateAsXAxisLabelFormatter(this, new SimpleDateFormat("HH:mm:ss", Locale.US)));
+        graph.getGridLabelRenderer().setNumHorizontalLabels(3);
+
+        // Set manual X bounds to have some padding
+        if (!data.isEmpty()) {
+            graph.getViewport().setMinX(data.get(0).first * 1000 - 10000);
+            graph.getViewport().setMaxX(data.get(data.size() - 1).first * 1000 + 10000);
+            graph.getViewport().setXAxisBoundsManual(true);
+        }
+
+        graph.getGridLabelRenderer().setHumanRounding(false);
     }
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -99,14 +118,13 @@ public class StatsActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         if (id == android.R.id.home) {
-            onBackPressed();  // or getOnBackPressedDispatcher().onBackPressed();
+            onBackPressed();
             return true;
         } else if (id == R.id.action_home) {
-            startActivity(new android.content.Intent(this, MainActivity.class)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP));
+            startActivity(new android.content.Intent(this, MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP));
             return true;
         } else if (id == R.id.action_statistics) {
-            // already here
+            // Already here
             return true;
         } else if (id == R.id.action_settings) {
             startActivity(new android.content.Intent(this, SettingsActivity.class));
@@ -114,5 +132,11 @@ public class StatsActivity extends AppCompatActivity {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onDestroy() {
+        myDb.close();
+        super.onDestroy();
     }
 }
