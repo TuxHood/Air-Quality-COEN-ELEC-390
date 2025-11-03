@@ -87,8 +87,8 @@ public class MainActivity extends AppCompatActivity {
     private DatabaseHelper myDb;
 
     //****** Mock/demo mode: run the app without any Bluetooth hardware **************************************************************************
-    private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
-    //private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
+    //private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
+    private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
 
     private final Runnable mockUpdater = new Runnable() {
         @Override public void run() {
@@ -172,7 +172,7 @@ public class MainActivity extends AppCompatActivity {
     }
     //*******************************************************************************************************************************************
 
-    private void applyCheckboxPreferences() {
+    private void updateFromPrefs() {
         android.content.SharedPreferences prefs = getSharedPreferences("sensor_prefs", MODE_PRIVATE);
 
         boolean showCO2 = prefs.getBoolean("show_co2", true);
@@ -207,7 +207,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        applyCheckboxPreferences();
+        updateFromPrefs();
     }
 
     @Override
@@ -239,7 +239,7 @@ public class MainActivity extends AppCompatActivity {
         h2LabelTextView = findViewById(R.id.h2LabelTextView);
 
         indexTextView = findViewById(R.id.indexTextView);
-        applyCheckboxPreferences();
+        updateFromPrefs();
 
         connectButton = findViewById(R.id.homeButton); // Using homeButton as connect button
 

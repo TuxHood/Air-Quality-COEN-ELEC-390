@@ -27,7 +27,8 @@ public class SettingsActivity extends AppCompatActivity {
     private CheckBox H2checkBox;
     private Button saveButton;
 
-    private SharedPreferences prefs;
+    private SharedPreferences prefsMain;
+    private SharedPreferences prefsStats;
 
     @SuppressLint("MissingInflatedId")
     @Override
@@ -35,7 +36,8 @@ public class SettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
-        prefs = getSharedPreferences("sensor_prefs", MODE_PRIVATE);
+        prefsMain = getSharedPreferences("sensor_prefs", MODE_PRIVATE);
+        prefsStats = getSharedPreferences("stats", MODE_PRIVATE);
 
         MaterialToolbar toolbar = findViewById(R.id.topAppBar);
         setSupportActionBar(toolbar);
@@ -55,28 +57,48 @@ public class SettingsActivity extends AppCompatActivity {
         H2checkBox = findViewById(R.id.H2checkBox);
         saveButton = findViewById(R.id.saveButton);
 
-        CO2checkBox.setChecked(prefs.getBoolean("show_co2", true));
-        TVOCcheckBox.setChecked(prefs.getBoolean("show_tvoc", true));
-        propanecheckBox.setChecked(prefs.getBoolean("show_propane", true));
-        COcheckBox.setChecked(prefs.getBoolean("show_co", true));
-        smokecheckBox.setChecked(prefs.getBoolean("show_smoke", true));
-        alcoholcheckBox.setChecked(prefs.getBoolean("show_alcohol", true));
-        methanecheckBox.setChecked(prefs.getBoolean("show_methane", true));
-        H2checkBox.setChecked(prefs.getBoolean("show_h2", true));
+        CO2checkBox.setChecked(prefsMain.getBoolean("show_co2", true));
+        TVOCcheckBox.setChecked(prefsMain.getBoolean("show_tvoc", true));
+        propanecheckBox.setChecked(prefsMain.getBoolean("show_propane", true));
+        COcheckBox.setChecked(prefsMain.getBoolean("show_co", true));
+        smokecheckBox.setChecked(prefsMain.getBoolean("show_smoke", true));
+        alcoholcheckBox.setChecked(prefsMain.getBoolean("show_alcohol", true));
+        methanecheckBox.setChecked(prefsMain.getBoolean("show_methane", true));
+        H2checkBox.setChecked(prefsMain.getBoolean("show_h2", true));
+
+        CO2checkBox.setChecked(prefsStats.getBoolean("show_co2", true));
+        TVOCcheckBox.setChecked(prefsStats.getBoolean("show_tvoc", true));
+        propanecheckBox.setChecked(prefsStats.getBoolean("show_propane", true));
+        COcheckBox.setChecked(prefsStats.getBoolean("show_co", true));
+        smokecheckBox.setChecked(prefsStats.getBoolean("show_smoke", true));
+        alcoholcheckBox.setChecked(prefsStats.getBoolean("show_alcohol", true));
+        methanecheckBox.setChecked(prefsStats.getBoolean("show_methane", true));
+        H2checkBox.setChecked(prefsStats.getBoolean("show_h2", true));
 
         saveButton.setOnClickListener(new View.OnClickListener(){
             @Override
             public void onClick(View view) {
-                SharedPreferences.Editor editor = prefs.edit();
-                editor.putBoolean("show_co2", CO2checkBox.isChecked());
-                editor.putBoolean("show_tvoc", TVOCcheckBox.isChecked());
-                editor.putBoolean("show_propane", propanecheckBox.isChecked());
-                editor.putBoolean("show_co", COcheckBox.isChecked());
-                editor.putBoolean("show_smoke", smokecheckBox.isChecked());
-                editor.putBoolean("show_alcohol", alcoholcheckBox.isChecked());
-                editor.putBoolean("show_methane", methanecheckBox.isChecked());
-                editor.putBoolean("show_h2", H2checkBox.isChecked());
-                editor.apply();
+                SharedPreferences.Editor editorMain = prefsMain.edit();
+                editorMain.putBoolean("show_co2", CO2checkBox.isChecked());
+                editorMain.putBoolean("show_tvoc", TVOCcheckBox.isChecked());
+                editorMain.putBoolean("show_propane", propanecheckBox.isChecked());
+                editorMain.putBoolean("show_co", COcheckBox.isChecked());
+                editorMain.putBoolean("show_smoke", smokecheckBox.isChecked());
+                editorMain.putBoolean("show_alcohol", alcoholcheckBox.isChecked());
+                editorMain.putBoolean("show_methane", methanecheckBox.isChecked());
+                editorMain.putBoolean("show_h2", H2checkBox.isChecked());
+                editorMain.apply();
+
+                SharedPreferences.Editor editorStats = prefsStats.edit();
+                editorStats.putBoolean("show_co2", CO2checkBox.isChecked());
+                editorStats.putBoolean("show_tvoc", TVOCcheckBox.isChecked());
+                editorStats.putBoolean("show_propane", propanecheckBox.isChecked());
+                editorStats.putBoolean("show_co", COcheckBox.isChecked());
+                editorStats.putBoolean("show_smoke", smokecheckBox.isChecked());
+                editorStats.putBoolean("show_alcohol", alcoholcheckBox.isChecked());
+                editorStats.putBoolean("show_methane", methanecheckBox.isChecked());
+                editorStats.putBoolean("show_h2", H2checkBox.isChecked());
+                editorStats.apply();
 
                 Toast.makeText(SettingsActivity.this, "Settings saved", Toast.LENGTH_SHORT).show();
             }
