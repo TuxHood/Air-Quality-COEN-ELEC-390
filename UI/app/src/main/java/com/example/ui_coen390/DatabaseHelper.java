@@ -4,6 +4,15 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.database.Cursor;
+import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.util.ArrayList;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String DATABASE_NAME = "SensorData.db";
@@ -26,7 +35,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        db.execSQL("create table " + TABLE_NAME + " (ID INTEGER PRIMARY KEY AUTOINCREMENT,TIMESTAMP INTEGER,CO2 REAL,TVOC REAL,PROPANE REAL,CO REAL,SMOKE REAL,ALCOHOL REAL,METHANE REAL,H2 REAL)");
+        db.execSQL("create table " + TABLE_NAME + " (ID INTEGER PRIMARY KEY AUTOINCREMENT,TIMESTAMP INTEGER,CO2 REAL,TVOC REAL,PROPANE REAL,CO REAL,SMOKE REAL,ALCOHOL REAL,METHANE REAL,H2 REAL,AQI REAL)");
     }
 
     @Override
@@ -51,4 +60,80 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         long result = db.insert(TABLE_NAME, null, contentValues);
         return result != -1;
     }
+
+    public boolean exportToJson(Context context) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = null;
+        FileWriter fileWriter = null;
+
+        try {
+            cursor = db.rawQuery("SELECT * FROM " + TABLE_NAME, null);
+
+            JSONArray jsonArray = new JSONArray();
+
+            if (cursor.moveToFirst()) {
+                do {
+                    JSONObject obj = new JSONObject();
+                    obj.put("ID", cursor.getInt(cursor.getColumnIndexOrThrow("ID")));
+                    obj.put("TIMESTAMP", cursor.getLong(cursor.getColumnIndexOrThrow("TIMESTAMP")));
+                    obj.put("CO2", cursor.getFloat(cursor.getColumnIndexOrThrow("CO2")));
+                    obj.put("TVOC", cursor.getFloat(cursor.getColumnIndexOrThrow("TVOC")));
+                    obj.put("PROPANE", cursor.getFloat(cursor.getColumnIndexOrThrow("PROPANE")));
+                    obj.put("CO", cursor.getFloat(cursor.getColumnIndexOrThrow("CO")));
+                    obj.put("SMOKE", cursor.getFloat(cursor.getColumnIndexOrThrow("SMOKE")));
+                    obj.put("ALCOHOL", cursor.getFloat(cursor.getColumnIndexOrThrow("ALCOHOL")));
+                    obj.put("METHANE", cursor.getFloat(cursor.getColumnIndexOrThrow("METHANE")));
+                    obj.put("H2", cursor.getFloat(cursor.getColumnIndexOrThrow("H2")));
+                    obj.put("AQI", cursor.getFloat(cursor.getColumnIndexOrThrow("AQI")));
+
+                    jsonArray.put(obj);
+                } while (cursor.moveToNext());
+            }
+
+            // Write JSON to internal storage
+            File file = new File(context.getFilesDir(), "sensor_data_export.json");
+            fileWriter = new FileWriter(file);
+            fileWriter.write(jsonArray.toString(4)); // Pretty-print with indentation
+            fileWriter.close();
+
+            Log.d("DB_EXPORT", "Data exported to: " + file.getAbsolutePath());
+            return true;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.e("DB_EXPORT", "Export failed", e);
+            return false;
+        } finally {
+            if (cursor != null) cursor.close();
+            if (fileWriter != null) {
+                try { fileWriter.close(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    public ArrayList<SensorReading> getLastNReadings(int n) {
+        ArrayList<SensorReading> readings = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT TIMESTAMP, CO2, TVOC, AQI FROM " + TABLE_NAME +
+                " ORDER BY ID DESC LIMIT " + n;
+        android.database.Cursor cursor = db.rawQuery(query, null);
+
+        if (cursor.moveToFirst()) {
+            do {
+                long timestamp = cursor.getLong(0);
+                float co2 = cursor.getFloat(1);
+                float tvoc = cursor.getFloat(2);
+                float aqi = cursor.getFloat(3);
+                readings.add(new SensorReading(timestamp, co2, tvoc, aqi));
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        db.close();
+
+        // reverse order so chart shows oldest → newest
+        java.util.Collections.reverse(readings);
+
+        return readings;
+    }
+
 }
