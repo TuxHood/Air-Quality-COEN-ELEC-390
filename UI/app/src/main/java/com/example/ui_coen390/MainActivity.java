@@ -26,6 +26,7 @@ import android.provider.Settings;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -64,26 +65,53 @@ public class MainActivity extends AppCompatActivity {
     private static final UUID SERVICE_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
     private static final UUID CHARACTERISTIC_UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E");
 
+    private TextView co2LabelTextView;
+    private TextView tvocLabelTextView;
+    private TextView propaneLabelTextView;
+    private TextView coLabelTextView;
+    private TextView smokeLabelTextView;
+    private TextView alcoholLabelTextView;
+    private TextView methaneLabelTextView;
+    private TextView h2LabelTextView;
     private TextView co2TextView;
     private TextView tvocTextView;
+    private TextView propaneTextView;
+    private TextView coTextView;
+    private TextView smokeTextView;
+    private TextView alcoholTextView;
+    private TextView methaneTextView;
+    private TextView h2TextView;
     private TextView indexTextView;
+
     private Button connectButton;
     private DatabaseHelper myDb;
 
     //****** Mock/demo mode: run the app without any Bluetooth hardware **************************************************************************
-    //private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
-    private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
+    private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
+    //private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
 
     private final Runnable mockUpdater = new Runnable() {
         @Override public void run() {
             // Generate simple fake values
             float co2  = 350 + (float)(Math.random() * 300);  // ppm
             float tvoc =  2  + (float)(Math.random() * 40);   // ppb
-            float aqi = calcSimpleIndex(co2, tvoc);
+            float propane = 0.5f + (float)(Math.random() * 10.0f);  // 0.5 - 10.5 ppm
+            float co   =   0 + (float)(Math.random() * 50);    // ppm (e.g., 0–50)
+            float smoke   = 0f   + (float)(Math.random() * 40.0f);  // 0 - 40 ppm
+            float alcohol = 0f   + (float)(Math.random() * 8.0f);   // 0 - 8 ppm
+            float methane = 0 + (float)(Math.random() * 5);    // ppm (e.g., 0–5)
+            float h2      = 0f   + (float)(Math.random() * 50.0f);  // 0 - 50 ppm
+            float aqi = calcSimpleIndex(co2, tvoc, co, methane, propane, smoke, alcohol, h2);
 
             runOnUiThread(() -> {
                 co2TextView.setText(String.format(Locale.US, "%.0f ppm", co2));
                 tvocTextView.setText(String.format(Locale.US, "%.0f ppb", tvoc));
+                propaneTextView.setText(String.format(Locale.US, "%.0f ppm", propane));
+                coTextView.setText(String.format(Locale.US, "%.0f ppm", co));
+                smokeTextView.setText(String.format(Locale.US, "%.0f ppm", smoke));
+                alcoholTextView.setText(String.format(Locale.US, "%.0f ppm", alcohol));
+                methaneTextView.setText(String.format(Locale.US, "%.0f ppm", methane));
+                h2TextView.setText(String.format(Locale.US, "%.0f ppm", h2));
                 indexTextView.setText(String.format(Locale.US, "%.0f ppb", aqi));
             });
 
@@ -91,7 +119,13 @@ public class MainActivity extends AppCompatActivity {
             getSharedPreferences("stats", MODE_PRIVATE).edit()
                     .putFloat("co2", co2)
                     .putFloat("tvoc", tvoc)
-                    .putFloat("aqi", calcSimpleIndex(co2, tvoc))
+                    .putFloat("propane", propane)
+                    .putFloat("co", co)
+                    .putFloat("smoke", smoke)
+                    .putFloat("alcohol", alcohol)
+                    .putFloat("methane", methane)
+                    .putFloat("h2", h2)
+                    .putFloat("aqi", calcSimpleIndex(co2, tvoc, co, methane, propane, smoke, alcohol, h2))
                     .apply();
 
             handler.postDelayed(this, 2000); // update every 2 seconds
@@ -102,6 +136,12 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(() -> {
             co2TextView.setText("Connecting...");
             tvocTextView.setText("Connecting...");
+            propaneTextView.setText("Connecting...");
+            coTextView.setText("Connecting...");
+            smokeTextView.setText("Connecting...");
+            alcoholTextView.setText("Connecting...");
+            methaneTextView.setText("Connecting...");
+            h2TextView.setText("Connecting...");
             indexTextView.setText("Connecting...");
             connectButton.setEnabled(false);
         });
@@ -112,13 +152,63 @@ public class MainActivity extends AppCompatActivity {
         }, 800);
     }
 
-    private float calcSimpleIndex(float co2, float tvoc) {
-        // Simple placeholder for demo (0–500-ish)
-        float co2Score  = Math.min(500f, co2 / 2f);  // e.g., 1000 ppm -> 500
-        float tvocScore = Math.min(500f, tvoc * 5f); // e.g., 100 ppb -> 500
-        return Math.max(co2Score, tvocScore);
+    private float calcSimpleIndex(float co2, float tvoc, float co, float methane, float propane, float smoke, float alcohol, float h2) {
+        // Normalize each sensor to a 0-500 "score" and return the worst (max) score.
+        float co2Score      = Math.min(500f, co2 / 2f);            // e.g., 1000 ppm -> 500
+        float tvocScore     = Math.min(500f, tvoc * 5f);           // e.g., 100 ppb -> 500
+        float coScore       = Math.min(500f, co * 10f);            // e.g., 50 ppm -> 500
+        float methaneScore  = Math.min(500f, methane * 100f);     // e.g., 5 ppm -> 500
+        float propaneScore  = Math.min(500f, propane * 50f);       // maps ~10 ppm -> 500
+        float smokeScore    = Math.min(500f, smoke * 12.5f);       // maps ~40 ppm -> 500
+        float alcoholScore  = Math.min(500f, alcohol * 62.5f);     // maps ~8 ppm -> 500
+        float h2Score       = Math.min(500f, h2 * 10f);            // maps ~50 ppm -> 500
+
+        float max1 = Math.max(co2Score, tvocScore);
+        float max2 = Math.max(coScore, methaneScore);
+        float max3 = Math.max(propaneScore, smokeScore);
+        float max4 = Math.max(alcoholScore, h2Score);
+
+        return Math.max(Math.max(max1, max2), Math.max(max3, max4));
     }
     //*******************************************************************************************************************************************
+
+    private void applyCheckboxPreferences() {
+        android.content.SharedPreferences prefs = getSharedPreferences("sensor_prefs", MODE_PRIVATE);
+
+        boolean showCO2 = prefs.getBoolean("show_co2", true);
+        boolean showTVOC = prefs.getBoolean("show_tvoc", true);
+        boolean showPropane = prefs.getBoolean("show_propane", true);
+        boolean showCO = prefs.getBoolean("show_co", true);
+        boolean showSmoke = prefs.getBoolean("show_smoke", true);
+        boolean showAlcohol = prefs.getBoolean("show_alcohol", true);
+        boolean showMethane = prefs.getBoolean("show_methane", true);
+        boolean showH2 = prefs.getBoolean("show_h2", true);
+
+        // Map preferences to your UI elements
+        co2TextView.setVisibility(showCO2 ? View.VISIBLE : View.INVISIBLE);
+        co2LabelTextView.setVisibility(showCO2 ? View.VISIBLE : View.INVISIBLE);
+        tvocTextView.setVisibility(showTVOC ? View.VISIBLE : View.INVISIBLE);
+        tvocLabelTextView.setVisibility(showTVOC ? View.VISIBLE : View.INVISIBLE);
+        propaneTextView.setVisibility(showPropane ? View.VISIBLE : View.INVISIBLE);
+        propaneLabelTextView.setVisibility(showPropane ? View.VISIBLE : View.INVISIBLE);
+        coTextView.setVisibility(showCO ? View.VISIBLE : View.INVISIBLE);
+        coLabelTextView.setVisibility(showCO ? View.VISIBLE : View.INVISIBLE);
+        smokeTextView.setVisibility(showSmoke ? View.VISIBLE : View.INVISIBLE);
+        smokeLabelTextView.setVisibility(showSmoke ? View.VISIBLE : View.INVISIBLE);
+        alcoholTextView.setVisibility(showAlcohol ? View.VISIBLE : View.INVISIBLE);
+        alcoholLabelTextView.setVisibility(showAlcohol ? View.VISIBLE : View.INVISIBLE);
+        methaneTextView.setVisibility(showMethane ? View.VISIBLE : View.INVISIBLE);
+        methaneLabelTextView.setVisibility(showMethane ? View.VISIBLE : View.INVISIBLE);
+        h2TextView.setVisibility(showH2 ? View.VISIBLE : View.INVISIBLE);
+        h2LabelTextView.setVisibility(showH2 ? View.VISIBLE : View.INVISIBLE);
+
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        applyCheckboxPreferences();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -132,12 +222,35 @@ public class MainActivity extends AppCompatActivity {
 
         myDb = new DatabaseHelper(this);
         co2TextView = findViewById(R.id.CO2TextView);
+        co2LabelTextView = findViewById(R.id.co2LabelTextView);
         tvocTextView = findViewById(R.id.TVOCTextView);
+        tvocLabelTextView = findViewById(R.id.tvocLabelTextView);
+        propaneTextView = findViewById(R.id.PropaneTextView);
+        propaneLabelTextView = findViewById(R.id.propaneLabelTextView);
+        coTextView = findViewById(R.id.COTextView);
+        coLabelTextView = findViewById(R.id.coLabelTextView);
+        smokeTextView = findViewById(R.id.SmokeTextView);
+        smokeLabelTextView = findViewById(R.id.smokeLabelTextView);
+        alcoholTextView = findViewById(R.id.AlcoholTextView);
+        alcoholLabelTextView = findViewById(R.id.alcoholLabelTextView);
+        methaneTextView = findViewById(R.id.MethaneTextView);
+        methaneLabelTextView = findViewById(R.id.methaneLabelTextView);
+        h2TextView = findViewById(R.id.H2TextView);
+        h2LabelTextView = findViewById(R.id.h2LabelTextView);
+
         indexTextView = findViewById(R.id.indexTextView);
+        applyCheckboxPreferences();
+
         connectButton = findViewById(R.id.homeButton); // Using homeButton as connect button
 
         co2TextView.setText(R.string.status_disconnected);
         tvocTextView.setText(R.string.status_disconnected);
+        propaneTextView.setText(R.string.status_disconnected);
+        coTextView.setText(R.string.status_disconnected);
+        smokeTextView.setText(R.string.status_disconnected);
+        alcoholTextView.setText(R.string.status_disconnected);
+        methaneTextView.setText(R.string.status_disconnected);
+        h2TextView.setText(R.string.status_disconnected);
         indexTextView.setText(R.string.status_disconnected);
 
         final BluetoothManager bluetoothManager =
@@ -312,6 +425,12 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         co2TextView.setText(R.string.status_disconnected);
                         tvocTextView.setText(R.string.status_disconnected);
+                        propaneTextView.setText(R.string.status_disconnected);
+                        coTextView.setText(R.string.status_disconnected);
+                        smokeTextView.setText(R.string.status_disconnected);
+                        alcoholTextView.setText(R.string.status_disconnected);
+                        methaneTextView.setText(R.string.status_disconnected);
+                        h2TextView.setText(R.string.status_disconnected);
                         indexTextView.setText(R.string.status_disconnected);
                         connectButton.setText(R.string.status_connect);
                         connectButton.setEnabled(true);
@@ -322,6 +441,12 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     co2TextView.setText(R.string.status_disconnected);
                     tvocTextView.setText(R.string.status_disconnected);
+                    propaneTextView.setText(R.string.status_disconnected);
+                    coTextView.setText(R.string.status_disconnected);
+                    smokeTextView.setText(R.string.status_disconnected);
+                    alcoholTextView.setText(R.string.status_disconnected);
+                    methaneTextView.setText(R.string.status_disconnected);
+                    h2TextView.setText(R.string.status_disconnected);
                     indexTextView.setText(R.string.status_disconnected);
                     connectButton.setText(R.string.status_connect);
                     connectButton.setEnabled(true);
@@ -414,19 +539,31 @@ public class MainActivity extends AppCompatActivity {
                 getSharedPreferences("stats", MODE_PRIVATE).edit()
                         .putFloat("co2", co2)
                         .putFloat("tvoc", tvoc)
-                        .putFloat("aqi", calcSimpleIndex(co2, tvoc))
+                        .putFloat("aqi", calcSimpleIndex(co2, tvoc, co, methane, propane, smoke, alcohol, h2))
                         .apply();
 
                 runOnUiThread(() -> {
-                    co2TextView.setText(String.format("%.2f ppm", co2)); // Format the output nicely
-                    tvocTextView.setText(String.format("%.2f ppb", tvoc)); // Format the output nicely
-                    indexTextView.setText(String.format("%.2f ", aqi));
+                    co2TextView.setText(String.format(Locale.US, "%.2f ppm", co2));
+                    tvocTextView.setText(String.format(Locale.US, "%.2f ppb", tvoc));
+                    propaneTextView.setText(String.format(Locale.US, "%.2f ppm", propane));
+                    coTextView.setText(String.format(Locale.US, "%.2f ppm", co));
+                    smokeTextView.setText(String.format(Locale.US, "%.2f ppm", smoke));
+                    alcoholTextView.setText(String.format(Locale.US, "%.2f ppm", alcohol));
+                    methaneTextView.setText(String.format(Locale.US, "%.2f ppm", methane));
+                    h2TextView.setText(String.format(Locale.US, "%.2f ppm", h2));
+                    indexTextView.setText(String.format(Locale.US, "%.2f", aqi));
                 });
             } else {
                 Log.w(TAG, "Received malformed data packet. Length: " + (data != null ? data.length : 0));
                 runOnUiThread(() -> {
                     co2TextView.setText(R.string.status_error);
                     tvocTextView.setText(R.string.status_error);
+                    propaneTextView.setText(R.string.status_error);
+                    coTextView.setText(R.string.status_error);
+                    smokeTextView.setText(R.string.status_error);
+                    alcoholTextView.setText(R.string.status_error);
+                    methaneTextView.setText(R.string.status_error);
+                    h2TextView.setText(R.string.status_error);
                     indexTextView.setText(R.string.status_error);
                 });
             }
