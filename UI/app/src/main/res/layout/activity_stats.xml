@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -25,7 +26,7 @@
             android:id="@+id/card_aqi"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="8dp"
             app:cardCornerRadius="16dp"
             app:cardUseCompatPadding="true"
             app:layout_constraintTop_toBottomOf="@id/topAppBar"
@@ -41,14 +42,14 @@
                 <TextView
                     android:text="Air Quality Index"
                     android:textStyle="bold"
-                    android:textSize="18sp"
+                    android:textSize="12sp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
 
                 <TextView
                     android:id="@+id/textAqi"
                     android:text="—"
-                    android:textSize="28sp"
+                    android:textSize="18sp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp" />
@@ -60,7 +61,7 @@
             android:id="@+id/card_co2"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="0dp"
             app:cardCornerRadius="16dp"
             app:cardUseCompatPadding="true"
             app:layout_constraintTop_toBottomOf="@id/card_aqi"
@@ -76,14 +77,14 @@
                 <TextView
                     android:text="CO₂"
                     android:textStyle="bold"
-                    android:textSize="18sp"
+                    android:textSize="12sp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
 
                 <TextView
                     android:id="@+id/textCo2"
                     android:text="—"
-                    android:textSize="24sp"
+                    android:textSize="18sp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp" />
@@ -95,7 +96,7 @@
             android:id="@+id/card_tvoc"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="0dp"
             app:cardCornerRadius="16dp"
             app:cardUseCompatPadding="true"
             app:layout_constraintTop_toBottomOf="@id/card_co2"
@@ -111,19 +112,57 @@
                 <TextView
                     android:text="TVOC"
                     android:textStyle="bold"
-                    android:textSize="18sp"
+                    android:textSize="12sp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
 
                 <TextView
                     android:id="@+id/textTvoc"
                     android:text="—"
-                    android:textSize="24sp"
+                    android:textSize="18sp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <!-- Chart card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_graph"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            app:cardCornerRadius="16dp"
+            app:cardUseCompatPadding="true"
+            app:layout_constraintTop_toBottomOf="@id/card_tvoc"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <com.github.mikephil.charting.charts.LineChart
+                    android:id="@+id/airQualityChart"
+                    android:layout_width="match_parent"
+                    android:layout_height="300dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floatingActionButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:clickable="true"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="1.0"
+            app:srcCompat="@android:drawable/ic_menu_save" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </ScrollView>

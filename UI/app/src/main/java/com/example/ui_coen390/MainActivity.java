@@ -38,12 +38,15 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.example.ui_coen390.databinding.ActivityMainBinding;
 import com.google.android.material.appbar.MaterialToolbar;
 
+import java.io.FileWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+
+import org.json.JSONArray;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -71,8 +74,8 @@ public class MainActivity extends AppCompatActivity {
     private DatabaseHelper myDb;
 
     //****** Mock/demo mode: run the app without any Bluetooth hardware **************************************************************************
-    //private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
-    private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
+    private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
+    //private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
 
     private final Runnable mockUpdater = new Runnable() {
         @Override public void run() {
@@ -93,6 +96,8 @@ public class MainActivity extends AppCompatActivity {
                     .putFloat("tvoc", tvoc)
                     .putFloat("aqi", calcSimpleIndex(co2, tvoc))
                     .apply();
+
+            saveReading(co2,tvoc, aqi);
 
             handler.postDelayed(this, 2000); // update every 2 seconds
         }
@@ -417,6 +422,7 @@ public class MainActivity extends AppCompatActivity {
                         .putFloat("aqi", calcSimpleIndex(co2, tvoc))
                         .apply();
 
+
                 runOnUiThread(() -> {
                     co2TextView.setText(String.format("%.2f ppm", co2)); // Format the output nicely
                     tvocTextView.setText(String.format("%.2f ppb", tvoc)); // Format the output nicely
@@ -475,5 +481,13 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+    private void saveReading(float co2, float tvoc, float aqi) {
+
+        long timestamp = System.currentTimeMillis() / 1000; // Unix timestamp in seconds
+
+        // Insert into SQLite database
+        myDb.insertData(timestamp, co2, tvoc, 0, 0, 0, 0, 0, 0, aqi);
+
     }
 }
