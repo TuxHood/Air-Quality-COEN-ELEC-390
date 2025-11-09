@@ -1,5 +1,6 @@
 package com.example.ui_coen390;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -223,20 +224,22 @@ public class StatsActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         if (id == android.R.id.home) {
-            onBackPressed();  // or getOnBackPressedDispatcher().onBackPressed();
+            onBackPressed();
             return true;
         } else if (id == R.id.action_home) {
-            startActivity(new android.content.Intent(this, MainActivity.class)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP));
+            startActivity(new Intent(this, MainActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
             return true;
         } else if (id == R.id.action_statistics) {
             // already here
             return true;
         } else if (id == R.id.action_settings) {
-            startActivity(new android.content.Intent(this, SettingsActivity.class));
+            startActivity(new Intent(this, SettingsActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
             return true;
         }
 
         return super.onOptionsItemSelected(item);
     }
+
 }

@@ -60,7 +60,7 @@ public class MainActivity extends AppCompatActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean scanning;
     private static final long SCAN_PERIOD = 10000;
-  
+
     //IMPORTANT REPLACE MAC ADDRESS WITH YOUR DEVICE
     private static final String DEVICE_ADDRESS = "e8:6b:ea:c9:ed:e2";
 
@@ -90,8 +90,8 @@ public class MainActivity extends AppCompatActivity {
     private DatabaseHelper myDb;
 
     //****** Mock/demo mode: run the app without any Bluetooth hardware **************************************************************************
-    private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
-    //private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
+    //private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
+    private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
 
     private final Runnable mockUpdater = new Runnable() {
         @Override public void run() {
@@ -279,6 +279,13 @@ public class MainActivity extends AppCompatActivity {
                 handleConnectionRequest();  // real BLE path
             });
         }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        // Optionally refresh UI or data if needed
     }
 
     private void handleConnectionRequest() {

@@ -1,6 +1,7 @@
 package com.example.ui_coen390;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.Menu;
@@ -115,15 +116,16 @@ public class SettingsActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
 
-        if (id == android.R.id.home) { // back arrow
+        if (id == android.R.id.home) {
             onBackPressed();
             return true;
         } else if (id == R.id.action_home) {
-            startActivity(new android.content.Intent(this, MainActivity.class)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP));
+            startActivity(new Intent(this, MainActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
             return true;
         } else if (id == R.id.action_statistics) {
-            startActivity(new android.content.Intent(this, StatsActivity.class));
+            startActivity(new Intent(this, StatsActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
             return true;
         } else if (id == R.id.action_settings) {
             // already here
@@ -132,4 +134,5 @@ public class SettingsActivity extends AppCompatActivity {
 
         return super.onOptionsItemSelected(item);
     }
+
 }

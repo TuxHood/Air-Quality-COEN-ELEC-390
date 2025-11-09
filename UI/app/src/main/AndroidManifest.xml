@@ -29,6 +29,7 @@
         </provider>
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:exported="true"
             android:theme="@style/Theme.UI_COEN390">
             <intent-filter>
