@@ -15,6 +15,7 @@ import com.jjoe64.graphview.GraphView;
 import com.jjoe64.graphview.series.DataPoint;
 import com.jjoe64.graphview.series.LineGraphSeries;
 
+import java.util.ArrayList;
 import java.util.Random;
 
 public class StatsActivity extends AppCompatActivity {
@@ -47,9 +48,10 @@ public class StatsActivity extends AppCompatActivity {
         graphH2 = findViewById(R.id.graphH2);
 
         // Initial populate (also done in onResume)
-        updateFromPrefs();
-        setupGraphs();
+        updateGraphs();
+        //setupGraphs();
 
+        // after a save see View->Tool Window-> Device explorer -> data/data/android.example.ui390/files ( or smth like that)
         exportButton = findViewById(R.id.floatingActionButton);
         exportButton.setOnClickListener(v -> {
             DatabaseHelper dbHelper = new DatabaseHelper(this);
@@ -73,71 +75,91 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     private void setupGraphs() {
-        // --- AQI Graph ---
-        LineGraphSeries<DataPoint> seriesAqi = new LineGraphSeries<>();
-        // Generate some dummy data
-        Random rnd = new Random();
-        for (int i = 0; i < 10; i++) {
-            seriesAqi.appendData(new DataPoint(i, 50 + rnd.nextInt(100)), true, 10);
-        }
-        graphAqi.addSeries(seriesAqi);
-        graphAqi.setTitle("AQI Over Time");
-
-        // --- CO2 Graph ---
-        LineGraphSeries<DataPoint> seriesCo2 = new LineGraphSeries<>();
-        for (int i = 0; i < 10; i++) {
-            seriesCo2.appendData(new DataPoint(i, 400 + rnd.nextInt(200)), true, 10);
-        }
-        graphCo2.addSeries(seriesCo2);
-        graphCo2.setTitle("CO2 Over Time");
-
-        // --- TVOC Graph ---
-        LineGraphSeries<DataPoint> seriesTvoc = new LineGraphSeries<>();
-        for (int i = 0; i < 10; i++) {
-            seriesTvoc.appendData(new DataPoint(i, 100 + rnd.nextInt(150)), true, 10);
-        }
-        graphTvoc.addSeries(seriesTvoc);
-        graphTvoc.setTitle("TVOC Over Time");
-
-        // --- Propane Graph ---
-        graphPropane.setTitle("Propane Over Time");
-
-        // --- Co Graph ---
-        graphCo.setTitle("CO Over Time");
-
-        // --- Smoke Graph ---
-        graphSmoke.setTitle("Smoke Over Time");
-
-        // --- Alcohol Graph ---
-        graphAlcohol.setTitle("Alcohol Over Time");
-
-        // --- Methane Graph ---
-        graphMethane.setTitle("Methane Over Time");
-
-        // --- H2 Graph ---
-        graphH2.setTitle("H2 Over Time");
-
     }
 
 
     @Override
     protected void onResume() {
         super.onResume();
-        updateFromPrefs();
+        updateGraphs();
     }
 
-    private void updateFromPrefs() {
+    private void updateGraphs() {
+
+        DatabaseHelper myDb = new DatabaseHelper(this);
+        ArrayList<SensorReading> readings = myDb.getLastNReadings(15); // last n readings
+
+        if (readings.isEmpty()) return;
+
+        // Prepare series for each sensor
+        LineGraphSeries<DataPoint> seriesAqi = new LineGraphSeries<>();
+        LineGraphSeries<DataPoint> seriesCo2 = new LineGraphSeries<>();
+        LineGraphSeries<DataPoint> seriesTvoc = new LineGraphSeries<>();
+        LineGraphSeries<DataPoint> seriesPropane = new LineGraphSeries<>();
+        LineGraphSeries<DataPoint> seriesCo = new LineGraphSeries<>();
+        LineGraphSeries<DataPoint> seriesSmoke = new LineGraphSeries<>();
+        LineGraphSeries<DataPoint> seriesAlcohol = new LineGraphSeries<>();
+        LineGraphSeries<DataPoint> seriesMethane = new LineGraphSeries<>();
+        LineGraphSeries<DataPoint> seriesH2 = new LineGraphSeries<>();
+
+
+        for (int i = 0; i < readings.size(); i++) {
+            SensorReading r = readings.get(i);
+            seriesAqi.appendData(new DataPoint(i, r.getAqi()), true, readings.size());
+            seriesCo2.appendData(new DataPoint(i, r.getCo2()), true, readings.size());
+            seriesTvoc.appendData(new DataPoint(i, r.getTvoc()), true, readings.size());
+            seriesPropane.appendData(new DataPoint(i, r.getPropane()), true, readings.size());
+            seriesCo.appendData(new DataPoint(i, r.getCo()), true, readings.size());
+            seriesSmoke.appendData(new DataPoint(i, r.getSmoke()), true, readings.size());
+            seriesAlcohol.appendData(new DataPoint(i, r.getAlcohol()), true, readings.size());
+            seriesMethane.appendData(new DataPoint(i, r.getMethane()), true, readings.size());
+            seriesH2.appendData(new DataPoint(i, r.getH2()), true, readings.size());
+        }
+
+        // Clear old series
+        graphAqi.removeAllSeries();
+        graphCo2.removeAllSeries();
+        graphTvoc.removeAllSeries();
+        graphPropane.removeAllSeries();
+        graphCo.removeAllSeries();
+        graphSmoke.removeAllSeries();
+        graphAlcohol.removeAllSeries();
+        graphMethane.removeAllSeries();
+        graphH2.removeAllSeries();
+
+        // Add new series
+        graphAqi.addSeries(seriesAqi);
+        graphCo2.addSeries(seriesCo2);
+        graphTvoc.addSeries(seriesTvoc);
+        graphPropane.addSeries(seriesPropane);
+        graphCo.addSeries(seriesCo);
+        graphSmoke.addSeries(seriesSmoke);
+        graphAlcohol.addSeries(seriesAlcohol);
+        graphMethane.addSeries(seriesMethane);
+        graphH2.addSeries(seriesH2);
+
+        //autoscaling off
+        graphAqi.getViewport().setXAxisBoundsManual(true);
+        graphAqi.getViewport().setMaxX(readings.size() - 1);
+        graphCo2.getViewport().setXAxisBoundsManual(true);
+        graphCo2.getViewport().setMaxX(readings.size() - 1);
+        graphTvoc.getViewport().setXAxisBoundsManual(true);
+        graphTvoc.getViewport().setMaxX(readings.size() - 1);
+        graphPropane.getViewport().setXAxisBoundsManual(true);
+        graphPropane.getViewport().setMaxX(readings.size() - 1);
+        graphCo.getViewport().setXAxisBoundsManual(true);
+        graphCo.getViewport().setMaxX(readings.size() - 1);
+        graphSmoke.getViewport().setXAxisBoundsManual(true);
+        graphSmoke.getViewport().setMaxX(readings.size() - 1);
+        graphAlcohol.getViewport().setXAxisBoundsManual(true);
+        graphAlcohol.getViewport().setMaxX(readings.size() - 1);
+        graphMethane.getViewport().setXAxisBoundsManual(true);
+        graphMethane.getViewport().setMaxX(readings.size() - 1);
+        graphH2.getViewport().setXAxisBoundsManual(true);
+        graphH2.getViewport().setMaxX(readings.size() - 1);
+
 
         android.content.SharedPreferences prefs = getSharedPreferences("stats", MODE_PRIVATE);
-        float co2  = prefs.getFloat("co2",  0f);
-        float tvoc = prefs.getFloat("tvoc", 0f);
-        float propane = prefs.getFloat("propane", 0f);
-        float co = prefs.getFloat("co", 0f);
-        float smoke = prefs.getFloat("smoke", 0f);
-        float alcohol = prefs.getFloat("alcohol", 0f);
-        float methane = prefs.getFloat("methane", 0f);
-        float h2 = prefs.getFloat("h2", 0f);
-        float aqi  = prefs.getFloat("aqi",  0f);
 
         // Preferences toggles (adjust keys if your SettingsActivity uses different names)
         boolean showCo2 = prefs.getBoolean("show_co2", true);
@@ -159,15 +181,16 @@ public class StatsActivity extends AppCompatActivity {
         android.widget.TextView tH2 = findViewById(R.id.textH2);
         android.widget.TextView tAqi = findViewById(R.id.textAqi);
 
-        tCo2.setText(String.format(java.util.Locale.US, "%.0f ppm", co2));
-        tTvoc.setText(String.format(java.util.Locale.US, "%.0f ppb", tvoc));
-        tPropane.setText(String.format(java.util.Locale.US, "%.0f ppb", propane));
-        tCo.setText(String.format(java.util.Locale.US, "%.0f ppm", co));
-        tSmoke.setText(String.format(java.util.Locale.US, "%.0f ppb", smoke));
-        tAlcohol.setText(String.format(java.util.Locale.US, "%.0f ppb", alcohol));
-        tMethane.setText(String.format(java.util.Locale.US, "%.0f ppb", methane));
-        tH2.setText(String.format(java.util.Locale.US, "%.0f ppb", h2));
-        tAqi.setText(String.format(java.util.Locale.US, "%.0f", aqi));
+        SensorReading latest = readings.get(readings.size()-1);
+        ((android.widget.TextView) findViewById(R.id.textAqi)).setText(String.format("%.0f", latest.getAqi()));
+        ((android.widget.TextView) findViewById(R.id.textCo2)).setText(String.format("%.0f ppm", latest.getCo2()));
+        ((android.widget.TextView) findViewById(R.id.textTvoc)).setText(String.format("%.0f ppb", latest.getTvoc()));
+        ((android.widget.TextView) findViewById(R.id.textPropane)).setText(String.format("%.0f ppb", latest.getPropane()));
+        ((android.widget.TextView) findViewById(R.id.textCo)).setText(String.format("%.0f ppm", latest.getCo()));
+        ((android.widget.TextView) findViewById(R.id.textSmoke)).setText(String.format("%.0f ppb", latest.getSmoke()));
+        ((android.widget.TextView) findViewById(R.id.textAlcohol)).setText(String.format("%.0f ppb", latest.getAlcohol()));
+        ((android.widget.TextView) findViewById(R.id.textMethane)).setText(String.format("%.0f ppb", latest.getMethane()));
+        ((android.widget.TextView) findViewById(R.id.textH2)).setText(String.format("%.0f ppb", latest.getH2()));
 
         graphCo2.setVisibility(showCo2 ? android.view.View.VISIBLE : android.view.View.INVISIBLE);
         tCo2.setVisibility(showCo2 ? android.view.View.VISIBLE : android.view.View.INVISIBLE);
@@ -185,6 +208,7 @@ public class StatsActivity extends AppCompatActivity {
         tMethane.setVisibility(showMethane ? android.view.View.VISIBLE : android.view.View.INVISIBLE);
         graphH2.setVisibility(showH2 ? android.view.View.VISIBLE : android.view.View.INVISIBLE);
         tH2.setVisibility(showH2 ? android.view.View.VISIBLE : android.view.View.INVISIBLE);
+
 
     }
 

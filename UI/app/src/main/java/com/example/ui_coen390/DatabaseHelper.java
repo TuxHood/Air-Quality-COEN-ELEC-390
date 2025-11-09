@@ -114,17 +114,24 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public ArrayList<SensorReading> getLastNReadings(int n) {
         ArrayList<SensorReading> readings = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
-        String query = "SELECT TIMESTAMP, CO2, TVOC, AQI FROM " + TABLE_NAME +
+        String query = "SELECT TIMESTAMP, CO2, TVOC, PROPANE, CO, SMOKE, ALCOHOL, METHANE, H2, AQI FROM " + TABLE_NAME +
                 " ORDER BY ID DESC LIMIT " + n;
         android.database.Cursor cursor = db.rawQuery(query, null);
 
         if (cursor.moveToFirst()) {
             do {
-                long timestamp = cursor.getLong(0);
-                float co2 = cursor.getFloat(1);
-                float tvoc = cursor.getFloat(2);
-                float aqi = cursor.getFloat(3);
-                readings.add(new SensorReading(timestamp, co2, tvoc, aqi));
+                long timestamp = cursor.getLong(cursor.getColumnIndexOrThrow("TIMESTAMP"));
+                float aqi = cursor.getFloat(cursor.getColumnIndexOrThrow("AQI"));
+                float co2 = cursor.getFloat(cursor.getColumnIndexOrThrow("CO2"));
+                float tvoc = cursor.getFloat(cursor.getColumnIndexOrThrow("TVOC"));
+                float propane = cursor.getFloat(cursor.getColumnIndexOrThrow("PROPANE"));
+                float co = cursor.getFloat(cursor.getColumnIndexOrThrow("CO"));
+                float smoke = cursor.getFloat(cursor.getColumnIndexOrThrow("SMOKE"));
+                float alcohol = cursor.getFloat(cursor.getColumnIndexOrThrow("ALCOHOL"));
+                float methane = cursor.getFloat(cursor.getColumnIndexOrThrow("METHANE"));
+                float h2 = cursor.getFloat(cursor.getColumnIndexOrThrow("H2"));
+
+                readings.add(new SensorReading( co2,  timestamp,  tvoc,  propane,  co,  smoke,  alcohol,  methane,  h2, aqi));
             } while (cursor.moveToNext());
         }
         cursor.close();

@@ -131,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
                     .putFloat("aqi", calcSimpleIndex(co2, tvoc, co, methane, propane, smoke, alcohol, h2))
                     .apply();
 
-            saveReading(co2,tvoc, aqi);
+            saveReading( co2,  tvoc,  aqi,  propane,  co,  smoke,  alcohol,  methane,  h2);
 
             handler.postDelayed(this, 2000); // update every 2 seconds
         }
@@ -619,12 +619,12 @@ public class MainActivity extends AppCompatActivity {
         }
         return super.onOptionsItemSelected(item);
     }
-    private void saveReading(float co2, float tvoc, float aqi) {
+    private void saveReading(float co2, float tvoc, float aqi, float propane, float co, float smoke, float alcohol, float methane, float h2) {
 
         long timestamp = System.currentTimeMillis() / 1000; // Unix timestamp in seconds
 
         // Insert into SQLite database
-        myDb.insertData(timestamp, co2, tvoc, 0, 0, 0, 0, 0, 0, aqi);
+        myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
 
     }
 }
