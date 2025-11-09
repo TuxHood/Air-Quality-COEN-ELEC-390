@@ -5,10 +5,10 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.viewbinding.ViewBinding;
 import androidx.viewbinding.ViewBindings;
 import com.example.ui_coen390.R;
@@ -19,22 +19,46 @@ import java.lang.String;
 
 public final class ActivityMainBinding implements ViewBinding {
   @NonNull
-  private final ConstraintLayout rootView;
+  private final ScrollView rootView;
+
+  @NonNull
+  public final TextView AlcoholTextView;
 
   @NonNull
   public final TextView CO2TextView;
 
   @NonNull
+  public final TextView COTextView;
+
+  @NonNull
+  public final TextView H2TextView;
+
+  @NonNull
   public final TextView HometextView;
+
+  @NonNull
+  public final TextView MethaneTextView;
+
+  @NonNull
+  public final TextView PropaneTextView;
+
+  @NonNull
+  public final TextView SmokeTextView;
 
   @NonNull
   public final TextView TVOCTextView;
 
   @NonNull
+  public final TextView alcoholLabelTextView;
+
+  @NonNull
   public final TextView co2LabelTextView;
 
   @NonNull
-  public final ConstraintLayout coordinatorLayout;
+  public final TextView coLabelTextView;
+
+  @NonNull
+  public final TextView h2LabelTextView;
 
   @NonNull
   public final Button homeButton;
@@ -46,33 +70,58 @@ public final class ActivityMainBinding implements ViewBinding {
   public final TextView indexTextView;
 
   @NonNull
+  public final TextView methaneLabelTextView;
+
+  @NonNull
+  public final TextView propaneLabelTextView;
+
+  @NonNull
+  public final TextView smokeLabelTextView;
+
+  @NonNull
   public final MaterialToolbar topAppBar;
 
   @NonNull
   public final TextView tvocLabelTextView;
 
-  private ActivityMainBinding(@NonNull ConstraintLayout rootView, @NonNull TextView CO2TextView,
-      @NonNull TextView HometextView, @NonNull TextView TVOCTextView,
-      @NonNull TextView co2LabelTextView, @NonNull ConstraintLayout coordinatorLayout,
-      @NonNull Button homeButton, @NonNull TextView indexLabelTextView,
-      @NonNull TextView indexTextView, @NonNull MaterialToolbar topAppBar,
+  private ActivityMainBinding(@NonNull ScrollView rootView, @NonNull TextView AlcoholTextView,
+      @NonNull TextView CO2TextView, @NonNull TextView COTextView, @NonNull TextView H2TextView,
+      @NonNull TextView HometextView, @NonNull TextView MethaneTextView,
+      @NonNull TextView PropaneTextView, @NonNull TextView SmokeTextView,
+      @NonNull TextView TVOCTextView, @NonNull TextView alcoholLabelTextView,
+      @NonNull TextView co2LabelTextView, @NonNull TextView coLabelTextView,
+      @NonNull TextView h2LabelTextView, @NonNull Button homeButton,
+      @NonNull TextView indexLabelTextView, @NonNull TextView indexTextView,
+      @NonNull TextView methaneLabelTextView, @NonNull TextView propaneLabelTextView,
+      @NonNull TextView smokeLabelTextView, @NonNull MaterialToolbar topAppBar,
       @NonNull TextView tvocLabelTextView) {
     this.rootView = rootView;
+    this.AlcoholTextView = AlcoholTextView;
     this.CO2TextView = CO2TextView;
+    this.COTextView = COTextView;
+    this.H2TextView = H2TextView;
     this.HometextView = HometextView;
+    this.MethaneTextView = MethaneTextView;
+    this.PropaneTextView = PropaneTextView;
+    this.SmokeTextView = SmokeTextView;
     this.TVOCTextView = TVOCTextView;
+    this.alcoholLabelTextView = alcoholLabelTextView;
     this.co2LabelTextView = co2LabelTextView;
-    this.coordinatorLayout = coordinatorLayout;
+    this.coLabelTextView = coLabelTextView;
+    this.h2LabelTextView = h2LabelTextView;
     this.homeButton = homeButton;
     this.indexLabelTextView = indexLabelTextView;
     this.indexTextView = indexTextView;
+    this.methaneLabelTextView = methaneLabelTextView;
+    this.propaneLabelTextView = propaneLabelTextView;
+    this.smokeLabelTextView = smokeLabelTextView;
     this.topAppBar = topAppBar;
     this.tvocLabelTextView = tvocLabelTextView;
   }
 
   @Override
   @NonNull
-  public ConstraintLayout getRoot() {
+  public ScrollView getRoot() {
     return rootView;
   }
 
@@ -97,9 +146,27 @@ public final class ActivityMainBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
+      id = R.id.AlcoholTextView;
+      TextView AlcoholTextView = ViewBindings.findChildViewById(rootView, id);
+      if (AlcoholTextView == null) {
+        break missingId;
+      }
+
       id = R.id.CO2TextView;
       TextView CO2TextView = ViewBindings.findChildViewById(rootView, id);
       if (CO2TextView == null) {
+        break missingId;
+      }
+
+      id = R.id.COTextView;
+      TextView COTextView = ViewBindings.findChildViewById(rootView, id);
+      if (COTextView == null) {
+        break missingId;
+      }
+
+      id = R.id.H2TextView;
+      TextView H2TextView = ViewBindings.findChildViewById(rootView, id);
+      if (H2TextView == null) {
         break missingId;
       }
 
@@ -109,9 +176,33 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.MethaneTextView;
+      TextView MethaneTextView = ViewBindings.findChildViewById(rootView, id);
+      if (MethaneTextView == null) {
+        break missingId;
+      }
+
+      id = R.id.PropaneTextView;
+      TextView PropaneTextView = ViewBindings.findChildViewById(rootView, id);
+      if (PropaneTextView == null) {
+        break missingId;
+      }
+
+      id = R.id.SmokeTextView;
+      TextView SmokeTextView = ViewBindings.findChildViewById(rootView, id);
+      if (SmokeTextView == null) {
+        break missingId;
+      }
+
       id = R.id.TVOCTextView;
       TextView TVOCTextView = ViewBindings.findChildViewById(rootView, id);
       if (TVOCTextView == null) {
+        break missingId;
+      }
+
+      id = R.id.alcoholLabelTextView;
+      TextView alcoholLabelTextView = ViewBindings.findChildViewById(rootView, id);
+      if (alcoholLabelTextView == null) {
         break missingId;
       }
 
@@ -121,7 +212,17 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      ConstraintLayout coordinatorLayout = (ConstraintLayout) rootView;
+      id = R.id.coLabelTextView;
+      TextView coLabelTextView = ViewBindings.findChildViewById(rootView, id);
+      if (coLabelTextView == null) {
+        break missingId;
+      }
+
+      id = R.id.h2LabelTextView;
+      TextView h2LabelTextView = ViewBindings.findChildViewById(rootView, id);
+      if (h2LabelTextView == null) {
+        break missingId;
+      }
 
       id = R.id.homeButton;
       Button homeButton = ViewBindings.findChildViewById(rootView, id);
@@ -141,6 +242,24 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.methaneLabelTextView;
+      TextView methaneLabelTextView = ViewBindings.findChildViewById(rootView, id);
+      if (methaneLabelTextView == null) {
+        break missingId;
+      }
+
+      id = R.id.propaneLabelTextView;
+      TextView propaneLabelTextView = ViewBindings.findChildViewById(rootView, id);
+      if (propaneLabelTextView == null) {
+        break missingId;
+      }
+
+      id = R.id.smokeLabelTextView;
+      TextView smokeLabelTextView = ViewBindings.findChildViewById(rootView, id);
+      if (smokeLabelTextView == null) {
+        break missingId;
+      }
+
       id = R.id.topAppBar;
       MaterialToolbar topAppBar = ViewBindings.findChildViewById(rootView, id);
       if (topAppBar == null) {
@@ -153,9 +272,11 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityMainBinding((ConstraintLayout) rootView, CO2TextView, HometextView,
-          TVOCTextView, co2LabelTextView, coordinatorLayout, homeButton, indexLabelTextView,
-          indexTextView, topAppBar, tvocLabelTextView);
+      return new ActivityMainBinding((ScrollView) rootView, AlcoholTextView, CO2TextView,
+          COTextView, H2TextView, HometextView, MethaneTextView, PropaneTextView, SmokeTextView,
+          TVOCTextView, alcoholLabelTextView, co2LabelTextView, coLabelTextView, h2LabelTextView,
+          homeButton, indexLabelTextView, indexTextView, methaneLabelTextView, propaneLabelTextView,
+          smokeLabelTextView, topAppBar, tvocLabelTextView);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

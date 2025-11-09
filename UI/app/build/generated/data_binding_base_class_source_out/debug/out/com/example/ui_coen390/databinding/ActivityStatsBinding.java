@@ -4,36 +4,48 @@ package com.example.ui_coen390.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.viewbinding.ViewBinding;
 import androidx.viewbinding.ViewBindings;
 import com.example.ui_coen390.R;
-import com.github.mikephil.charting.charts.LineChart;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.jjoe64.graphview.GraphView;
 import java.lang.NullPointerException;
 import java.lang.Override;
 import java.lang.String;
 
 public final class ActivityStatsBinding implements ViewBinding {
   @NonNull
-  private final ScrollView rootView;
+  private final CoordinatorLayout rootView;
 
   @NonNull
-  public final LineChart airQualityChart;
+  public final MaterialCardView cardAlcohol;
 
   @NonNull
   public final MaterialCardView cardAqi;
 
   @NonNull
+  public final MaterialCardView cardCo;
+
+  @NonNull
   public final MaterialCardView cardCo2;
 
   @NonNull
-  public final MaterialCardView cardGraph;
+  public final MaterialCardView cardH2;
+
+  @NonNull
+  public final MaterialCardView cardMethane;
+
+  @NonNull
+  public final MaterialCardView cardPropane;
+
+  @NonNull
+  public final MaterialCardView cardSmoke;
 
   @NonNull
   public final MaterialCardView cardTvoc;
@@ -42,10 +54,55 @@ public final class ActivityStatsBinding implements ViewBinding {
   public final FloatingActionButton floatingActionButton;
 
   @NonNull
+  public final GraphView graphAlcohol;
+
+  @NonNull
+  public final GraphView graphAqi;
+
+  @NonNull
+  public final GraphView graphCo;
+
+  @NonNull
+  public final GraphView graphCo2;
+
+  @NonNull
+  public final GraphView graphH2;
+
+  @NonNull
+  public final GraphView graphMethane;
+
+  @NonNull
+  public final GraphView graphPropane;
+
+  @NonNull
+  public final GraphView graphSmoke;
+
+  @NonNull
+  public final GraphView graphTvoc;
+
+  @NonNull
+  public final TextView textAlcohol;
+
+  @NonNull
   public final TextView textAqi;
 
   @NonNull
+  public final TextView textCo;
+
+  @NonNull
   public final TextView textCo2;
+
+  @NonNull
+  public final TextView textH2;
+
+  @NonNull
+  public final TextView textMethane;
+
+  @NonNull
+  public final TextView textPropane;
+
+  @NonNull
+  public final TextView textSmoke;
 
   @NonNull
   public final TextView textTvoc;
@@ -53,27 +110,54 @@ public final class ActivityStatsBinding implements ViewBinding {
   @NonNull
   public final MaterialToolbar topAppBar;
 
-  private ActivityStatsBinding(@NonNull ScrollView rootView, @NonNull LineChart airQualityChart,
-      @NonNull MaterialCardView cardAqi, @NonNull MaterialCardView cardCo2,
-      @NonNull MaterialCardView cardGraph, @NonNull MaterialCardView cardTvoc,
-      @NonNull FloatingActionButton floatingActionButton, @NonNull TextView textAqi,
-      @NonNull TextView textCo2, @NonNull TextView textTvoc, @NonNull MaterialToolbar topAppBar) {
+  private ActivityStatsBinding(@NonNull CoordinatorLayout rootView,
+      @NonNull MaterialCardView cardAlcohol, @NonNull MaterialCardView cardAqi,
+      @NonNull MaterialCardView cardCo, @NonNull MaterialCardView cardCo2,
+      @NonNull MaterialCardView cardH2, @NonNull MaterialCardView cardMethane,
+      @NonNull MaterialCardView cardPropane, @NonNull MaterialCardView cardSmoke,
+      @NonNull MaterialCardView cardTvoc, @NonNull FloatingActionButton floatingActionButton,
+      @NonNull GraphView graphAlcohol, @NonNull GraphView graphAqi, @NonNull GraphView graphCo,
+      @NonNull GraphView graphCo2, @NonNull GraphView graphH2, @NonNull GraphView graphMethane,
+      @NonNull GraphView graphPropane, @NonNull GraphView graphSmoke, @NonNull GraphView graphTvoc,
+      @NonNull TextView textAlcohol, @NonNull TextView textAqi, @NonNull TextView textCo,
+      @NonNull TextView textCo2, @NonNull TextView textH2, @NonNull TextView textMethane,
+      @NonNull TextView textPropane, @NonNull TextView textSmoke, @NonNull TextView textTvoc,
+      @NonNull MaterialToolbar topAppBar) {
     this.rootView = rootView;
-    this.airQualityChart = airQualityChart;
+    this.cardAlcohol = cardAlcohol;
     this.cardAqi = cardAqi;
+    this.cardCo = cardCo;
     this.cardCo2 = cardCo2;
-    this.cardGraph = cardGraph;
+    this.cardH2 = cardH2;
+    this.cardMethane = cardMethane;
+    this.cardPropane = cardPropane;
+    this.cardSmoke = cardSmoke;
     this.cardTvoc = cardTvoc;
     this.floatingActionButton = floatingActionButton;
+    this.graphAlcohol = graphAlcohol;
+    this.graphAqi = graphAqi;
+    this.graphCo = graphCo;
+    this.graphCo2 = graphCo2;
+    this.graphH2 = graphH2;
+    this.graphMethane = graphMethane;
+    this.graphPropane = graphPropane;
+    this.graphSmoke = graphSmoke;
+    this.graphTvoc = graphTvoc;
+    this.textAlcohol = textAlcohol;
     this.textAqi = textAqi;
+    this.textCo = textCo;
     this.textCo2 = textCo2;
+    this.textH2 = textH2;
+    this.textMethane = textMethane;
+    this.textPropane = textPropane;
+    this.textSmoke = textSmoke;
     this.textTvoc = textTvoc;
     this.topAppBar = topAppBar;
   }
 
   @Override
   @NonNull
-  public ScrollView getRoot() {
+  public CoordinatorLayout getRoot() {
     return rootView;
   }
 
@@ -98,9 +182,9 @@ public final class ActivityStatsBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.airQualityChart;
-      LineChart airQualityChart = ViewBindings.findChildViewById(rootView, id);
-      if (airQualityChart == null) {
+      id = R.id.card_alcohol;
+      MaterialCardView cardAlcohol = ViewBindings.findChildViewById(rootView, id);
+      if (cardAlcohol == null) {
         break missingId;
       }
 
@@ -110,15 +194,39 @@ public final class ActivityStatsBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.card_co;
+      MaterialCardView cardCo = ViewBindings.findChildViewById(rootView, id);
+      if (cardCo == null) {
+        break missingId;
+      }
+
       id = R.id.card_co2;
       MaterialCardView cardCo2 = ViewBindings.findChildViewById(rootView, id);
       if (cardCo2 == null) {
         break missingId;
       }
 
-      id = R.id.card_graph;
-      MaterialCardView cardGraph = ViewBindings.findChildViewById(rootView, id);
-      if (cardGraph == null) {
+      id = R.id.card_h2;
+      MaterialCardView cardH2 = ViewBindings.findChildViewById(rootView, id);
+      if (cardH2 == null) {
+        break missingId;
+      }
+
+      id = R.id.card_methane;
+      MaterialCardView cardMethane = ViewBindings.findChildViewById(rootView, id);
+      if (cardMethane == null) {
+        break missingId;
+      }
+
+      id = R.id.card_propane;
+      MaterialCardView cardPropane = ViewBindings.findChildViewById(rootView, id);
+      if (cardPropane == null) {
+        break missingId;
+      }
+
+      id = R.id.card_smoke;
+      MaterialCardView cardSmoke = ViewBindings.findChildViewById(rootView, id);
+      if (cardSmoke == null) {
         break missingId;
       }
 
@@ -134,15 +242,105 @@ public final class ActivityStatsBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.graphAlcohol;
+      GraphView graphAlcohol = ViewBindings.findChildViewById(rootView, id);
+      if (graphAlcohol == null) {
+        break missingId;
+      }
+
+      id = R.id.graphAqi;
+      GraphView graphAqi = ViewBindings.findChildViewById(rootView, id);
+      if (graphAqi == null) {
+        break missingId;
+      }
+
+      id = R.id.graphCo;
+      GraphView graphCo = ViewBindings.findChildViewById(rootView, id);
+      if (graphCo == null) {
+        break missingId;
+      }
+
+      id = R.id.graphCo2;
+      GraphView graphCo2 = ViewBindings.findChildViewById(rootView, id);
+      if (graphCo2 == null) {
+        break missingId;
+      }
+
+      id = R.id.graphH2;
+      GraphView graphH2 = ViewBindings.findChildViewById(rootView, id);
+      if (graphH2 == null) {
+        break missingId;
+      }
+
+      id = R.id.graphMethane;
+      GraphView graphMethane = ViewBindings.findChildViewById(rootView, id);
+      if (graphMethane == null) {
+        break missingId;
+      }
+
+      id = R.id.graphPropane;
+      GraphView graphPropane = ViewBindings.findChildViewById(rootView, id);
+      if (graphPropane == null) {
+        break missingId;
+      }
+
+      id = R.id.graphSmoke;
+      GraphView graphSmoke = ViewBindings.findChildViewById(rootView, id);
+      if (graphSmoke == null) {
+        break missingId;
+      }
+
+      id = R.id.graphTvoc;
+      GraphView graphTvoc = ViewBindings.findChildViewById(rootView, id);
+      if (graphTvoc == null) {
+        break missingId;
+      }
+
+      id = R.id.textAlcohol;
+      TextView textAlcohol = ViewBindings.findChildViewById(rootView, id);
+      if (textAlcohol == null) {
+        break missingId;
+      }
+
       id = R.id.textAqi;
       TextView textAqi = ViewBindings.findChildViewById(rootView, id);
       if (textAqi == null) {
         break missingId;
       }
 
+      id = R.id.textCo;
+      TextView textCo = ViewBindings.findChildViewById(rootView, id);
+      if (textCo == null) {
+        break missingId;
+      }
+
       id = R.id.textCo2;
       TextView textCo2 = ViewBindings.findChildViewById(rootView, id);
       if (textCo2 == null) {
+        break missingId;
+      }
+
+      id = R.id.textH2;
+      TextView textH2 = ViewBindings.findChildViewById(rootView, id);
+      if (textH2 == null) {
+        break missingId;
+      }
+
+      id = R.id.textMethane;
+      TextView textMethane = ViewBindings.findChildViewById(rootView, id);
+      if (textMethane == null) {
+        break missingId;
+      }
+
+      id = R.id.textPropane;
+      TextView textPropane = ViewBindings.findChildViewById(rootView, id);
+      if (textPropane == null) {
+        break missingId;
+      }
+
+      id = R.id.textSmoke;
+      TextView textSmoke = ViewBindings.findChildViewById(rootView, id);
+      if (textSmoke == null) {
         break missingId;
       }
 
@@ -158,8 +356,11 @@ public final class ActivityStatsBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityStatsBinding((ScrollView) rootView, airQualityChart, cardAqi, cardCo2,
-          cardGraph, cardTvoc, floatingActionButton, textAqi, textCo2, textTvoc, topAppBar);
+      return new ActivityStatsBinding((CoordinatorLayout) rootView, cardAlcohol, cardAqi, cardCo,
+          cardCo2, cardH2, cardMethane, cardPropane, cardSmoke, cardTvoc, floatingActionButton,
+          graphAlcohol, graphAqi, graphCo, graphCo2, graphH2, graphMethane, graphPropane,
+          graphSmoke, graphTvoc, textAlcohol, textAqi, textCo, textCo2, textH2, textMethane,
+          textPropane, textSmoke, textTvoc, topAppBar);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

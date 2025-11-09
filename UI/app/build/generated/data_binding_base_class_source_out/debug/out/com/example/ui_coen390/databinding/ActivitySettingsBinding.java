@@ -4,10 +4,12 @@ package com.example.ui_coen390.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.viewbinding.ViewBinding;
 import androidx.viewbinding.ViewBindings;
 import com.example.ui_coen390.R;
@@ -18,24 +20,64 @@ import java.lang.String;
 
 public final class ActivitySettingsBinding implements ViewBinding {
   @NonNull
-  private final ConstraintLayout rootView;
+  private final ScrollView rootView;
+
+  @NonNull
+  public final CheckBox CO2checkBox;
+
+  @NonNull
+  public final CheckBox COcheckBox;
+
+  @NonNull
+  public final CheckBox H2checkBox;
+
+  @NonNull
+  public final CheckBox TVOCcheckBox;
+
+  @NonNull
+  public final CheckBox alcoholcheckBox;
+
+  @NonNull
+  public final CheckBox methanecheckBox;
+
+  @NonNull
+  public final CheckBox propanecheckBox;
+
+  @NonNull
+  public final Button saveButton;
 
   @NonNull
   public final TextView settingsPlaceholder;
 
   @NonNull
+  public final CheckBox smokecheckBox;
+
+  @NonNull
   public final MaterialToolbar topAppBar;
 
-  private ActivitySettingsBinding(@NonNull ConstraintLayout rootView,
-      @NonNull TextView settingsPlaceholder, @NonNull MaterialToolbar topAppBar) {
+  private ActivitySettingsBinding(@NonNull ScrollView rootView, @NonNull CheckBox CO2checkBox,
+      @NonNull CheckBox COcheckBox, @NonNull CheckBox H2checkBox, @NonNull CheckBox TVOCcheckBox,
+      @NonNull CheckBox alcoholcheckBox, @NonNull CheckBox methanecheckBox,
+      @NonNull CheckBox propanecheckBox, @NonNull Button saveButton,
+      @NonNull TextView settingsPlaceholder, @NonNull CheckBox smokecheckBox,
+      @NonNull MaterialToolbar topAppBar) {
     this.rootView = rootView;
+    this.CO2checkBox = CO2checkBox;
+    this.COcheckBox = COcheckBox;
+    this.H2checkBox = H2checkBox;
+    this.TVOCcheckBox = TVOCcheckBox;
+    this.alcoholcheckBox = alcoholcheckBox;
+    this.methanecheckBox = methanecheckBox;
+    this.propanecheckBox = propanecheckBox;
+    this.saveButton = saveButton;
     this.settingsPlaceholder = settingsPlaceholder;
+    this.smokecheckBox = smokecheckBox;
     this.topAppBar = topAppBar;
   }
 
   @Override
   @NonNull
-  public ConstraintLayout getRoot() {
+  public ScrollView getRoot() {
     return rootView;
   }
 
@@ -60,9 +102,63 @@ public final class ActivitySettingsBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
+      id = R.id.CO2checkBox;
+      CheckBox CO2checkBox = ViewBindings.findChildViewById(rootView, id);
+      if (CO2checkBox == null) {
+        break missingId;
+      }
+
+      id = R.id.COcheckBox;
+      CheckBox COcheckBox = ViewBindings.findChildViewById(rootView, id);
+      if (COcheckBox == null) {
+        break missingId;
+      }
+
+      id = R.id.H2checkBox;
+      CheckBox H2checkBox = ViewBindings.findChildViewById(rootView, id);
+      if (H2checkBox == null) {
+        break missingId;
+      }
+
+      id = R.id.TVOCcheckBox;
+      CheckBox TVOCcheckBox = ViewBindings.findChildViewById(rootView, id);
+      if (TVOCcheckBox == null) {
+        break missingId;
+      }
+
+      id = R.id.alcoholcheckBox;
+      CheckBox alcoholcheckBox = ViewBindings.findChildViewById(rootView, id);
+      if (alcoholcheckBox == null) {
+        break missingId;
+      }
+
+      id = R.id.methanecheckBox;
+      CheckBox methanecheckBox = ViewBindings.findChildViewById(rootView, id);
+      if (methanecheckBox == null) {
+        break missingId;
+      }
+
+      id = R.id.propanecheckBox;
+      CheckBox propanecheckBox = ViewBindings.findChildViewById(rootView, id);
+      if (propanecheckBox == null) {
+        break missingId;
+      }
+
+      id = R.id.saveButton;
+      Button saveButton = ViewBindings.findChildViewById(rootView, id);
+      if (saveButton == null) {
+        break missingId;
+      }
+
       id = R.id.settingsPlaceholder;
       TextView settingsPlaceholder = ViewBindings.findChildViewById(rootView, id);
       if (settingsPlaceholder == null) {
+        break missingId;
+      }
+
+      id = R.id.smokecheckBox;
+      CheckBox smokecheckBox = ViewBindings.findChildViewById(rootView, id);
+      if (smokecheckBox == null) {
         break missingId;
       }
 
@@ -72,8 +168,9 @@ public final class ActivitySettingsBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivitySettingsBinding((ConstraintLayout) rootView, settingsPlaceholder,
-          topAppBar);
+      return new ActivitySettingsBinding((ScrollView) rootView, CO2checkBox, COcheckBox, H2checkBox,
+          TVOCcheckBox, alcoholcheckBox, methanecheckBox, propanecheckBox, saveButton,
+          settingsPlaceholder, smokecheckBox, topAppBar);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));
