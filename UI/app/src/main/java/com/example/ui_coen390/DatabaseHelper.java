@@ -2,17 +2,14 @@ package com.example.ui_coen390;
 
 import android.content.ContentValues;
 import android.content.Context;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.database.Cursor;
 import android.util.Log;
+import android.util.Pair;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import java.io.File;
-import java.io.FileWriter;
 import java.util.ArrayList;
+import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String DATABASE_NAME = "SensorData.db";
@@ -29,13 +26,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_10 = "H2";
     public static final String COL_11 = "AQI";
 
+    public static final String[] POLLUTANT_COLUMNS = {COL_3, COL_4, COL_5, COL_6, COL_7, COL_8, COL_9, COL_10, COL_11};
+
+
     public DatabaseHelper(Context context) {
-        super(context, DATABASE_NAME, null, 1);
+        super(context, DATABASE_NAME, null, 2);
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        db.execSQL("create table " + TABLE_NAME + " (ID INTEGER PRIMARY KEY AUTOINCREMENT,TIMESTAMP INTEGER,CO2 REAL,TVOC REAL,PROPANE REAL,CO REAL,SMOKE REAL,ALCOHOL REAL,METHANE REAL,H2 REAL,AQI REAL)");
+        db.execSQL("create table " + TABLE_NAME + " (ID INTEGER PRIMARY KEY AUTOINCREMENT,TIMESTAMP INTEGER,CO2 REAL,TVOC REAL,PROPANE REAL,CO REAL,SMOKE REAL,ALCOHOL REAL,METHANE REAL,H2 REAL, AQI REAL)");
     }
 
     @Override
@@ -61,86 +61,73 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return result != -1;
     }
 
-    public boolean exportToJson(Context context) {
+    public List<Pair<Long, Double>> getReadingsForPollutant(String pollutantColumnName) {
+        List<Pair<Long, Double>> dataList = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = null;
-        FileWriter fileWriter = null;
+        Cursor cursor = db.query(TABLE_NAME, new String[]{COL_2, pollutantColumnName}, null, null, null, null, COL_2 + " ASC");
 
-        try {
-            cursor = db.rawQuery("SELECT * FROM " + TABLE_NAME, null);
+        if (cursor != null) {
+            int timestampIndex = cursor.getColumnIndex(COL_2);
+            int valueIndex = cursor.getColumnIndex(pollutantColumnName);
 
-            JSONArray jsonArray = new JSONArray();
-
-            if (cursor.moveToFirst()) {
-                do {
-                    JSONObject obj = new JSONObject();
-                    obj.put("ID", cursor.getInt(cursor.getColumnIndexOrThrow("ID")));
-                    obj.put("TIMESTAMP", cursor.getLong(cursor.getColumnIndexOrThrow("TIMESTAMP")));
-                    obj.put("CO2", cursor.getFloat(cursor.getColumnIndexOrThrow("CO2")));
-                    obj.put("TVOC", cursor.getFloat(cursor.getColumnIndexOrThrow("TVOC")));
-                    obj.put("PROPANE", cursor.getFloat(cursor.getColumnIndexOrThrow("PROPANE")));
-                    obj.put("CO", cursor.getFloat(cursor.getColumnIndexOrThrow("CO")));
-                    obj.put("SMOKE", cursor.getFloat(cursor.getColumnIndexOrThrow("SMOKE")));
-                    obj.put("ALCOHOL", cursor.getFloat(cursor.getColumnIndexOrThrow("ALCOHOL")));
-                    obj.put("METHANE", cursor.getFloat(cursor.getColumnIndexOrThrow("METHANE")));
-                    obj.put("H2", cursor.getFloat(cursor.getColumnIndexOrThrow("H2")));
-                    obj.put("AQI", cursor.getFloat(cursor.getColumnIndexOrThrow("AQI")));
-
-                    jsonArray.put(obj);
-                } while (cursor.moveToNext());
+            if(timestampIndex != -1 && valueIndex != -1) {
+                while (cursor.moveToNext()) {
+                    long timestamp = cursor.getLong(timestampIndex);
+                    double value = cursor.getDouble(valueIndex);
+                    dataList.add(new Pair<>(timestamp, value));
+                }
             }
-
-            // Write JSON to internal storage
-            File file = new File(context.getFilesDir(), "sensor_data_export.json");
-            fileWriter = new FileWriter(file);
-            fileWriter.write(jsonArray.toString(4)); // Pretty-print with indentation
-            fileWriter.close();
-
-            Log.d("DB_EXPORT", "Data exported to: " + file.getAbsolutePath());
-            return true;
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            Log.e("DB_EXPORT", "Export failed", e);
-            return false;
-        } finally {
-            if (cursor != null) cursor.close();
-            if (fileWriter != null) {
-                try { fileWriter.close(); } catch (Exception ignored) {}
-            }
+            cursor.close();
         }
+        return dataList;
     }
-
     public ArrayList<SensorReading> getLastNReadings(int n) {
         ArrayList<SensorReading> readings = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
-        String query = "SELECT TIMESTAMP, CO2, TVOC, PROPANE, CO, SMOKE, ALCOHOL, METHANE, H2, AQI FROM " + TABLE_NAME +
-                " ORDER BY ID DESC LIMIT " + n;
-        android.database.Cursor cursor = db.rawQuery(query, null);
+        Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_NAME + " ORDER BY " + COL_1 + " DESC LIMIT " + n, null);
 
         if (cursor.moveToFirst()) {
             do {
-                long timestamp = cursor.getLong(cursor.getColumnIndexOrThrow("TIMESTAMP"));
-                float aqi = cursor.getFloat(cursor.getColumnIndexOrThrow("AQI"));
-                float co2 = cursor.getFloat(cursor.getColumnIndexOrThrow("CO2"));
-                float tvoc = cursor.getFloat(cursor.getColumnIndexOrThrow("TVOC"));
-                float propane = cursor.getFloat(cursor.getColumnIndexOrThrow("PROPANE"));
-                float co = cursor.getFloat(cursor.getColumnIndexOrThrow("CO"));
-                float smoke = cursor.getFloat(cursor.getColumnIndexOrThrow("SMOKE"));
-                float alcohol = cursor.getFloat(cursor.getColumnIndexOrThrow("ALCOHOL"));
-                float methane = cursor.getFloat(cursor.getColumnIndexOrThrow("METHANE"));
-                float h2 = cursor.getFloat(cursor.getColumnIndexOrThrow("H2"));
-
-                readings.add(new SensorReading( co2,  timestamp,  tvoc,  propane,  co,  smoke,  alcohol,  methane,  h2, aqi));
+                readings.add(new SensorReading(
+                        cursor.getLong(cursor.getColumnIndexOrThrow(COL_2)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_3)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_4)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_5)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_6)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_7)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_8)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_9)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_10)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_11))
+                ));
             } while (cursor.moveToNext());
         }
         cursor.close();
-        db.close();
-
-        // reverse order so chart shows oldest → newest
-        java.util.Collections.reverse(readings);
-
         return readings;
     }
 
+    public ArrayList<SensorReading> getAllReadings() {
+        ArrayList<SensorReading> readings = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_NAME + " ORDER BY " + COL_2 + " ASC", null);
+
+        if (cursor.moveToFirst()) {
+            do {
+                readings.add(new SensorReading(
+                        cursor.getLong(cursor.getColumnIndexOrThrow(COL_2)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_3)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_4)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_5)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_6)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_7)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_8)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_9)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_10)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(COL_11))
+                ));
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        return readings;
+    }
 }

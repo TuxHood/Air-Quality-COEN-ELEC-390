@@ -1,138 +1,98 @@
 package com.example.ui_coen390;
 
-import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
 
+import java.util.HashSet;
+import java.util.Set;
+
 public class SettingsActivity extends AppCompatActivity {
 
-    private CheckBox CO2checkBox;
-    private CheckBox TVOCcheckBox;
-    private CheckBox propanecheckBox;
-    private CheckBox COcheckBox;
-    private CheckBox smokecheckBox;
-    private CheckBox alcoholcheckBox;
-    private CheckBox methanecheckBox;
-    private CheckBox H2checkBox;
+    private LinearLayout checkboxContainer;
     private Button saveButton;
 
-    private SharedPreferences prefsMain;
-    private SharedPreferences prefsStats;
-
-    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
-        prefsMain = getSharedPreferences("sensor_prefs", MODE_PRIVATE);
-        prefsStats = getSharedPreferences("stats", MODE_PRIVATE);
-
         MaterialToolbar toolbar = findViewById(R.id.topAppBar);
         setSupportActionBar(toolbar);
 
-        // Optional up arrow:
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
 
-        CO2checkBox = findViewById(R.id.CO2checkBox);
-        TVOCcheckBox = findViewById(R.id.TVOCcheckBox);
-        propanecheckBox = findViewById(R.id.propanecheckBox);
-        COcheckBox = findViewById(R.id.COcheckBox);
-        smokecheckBox = findViewById(R.id.smokecheckBox);
-        alcoholcheckBox = findViewById(R.id.alcoholcheckBox);
-        methanecheckBox = findViewById(R.id.methanecheckBox);
-        H2checkBox = findViewById(R.id.H2checkBox);
+        checkboxContainer = findViewById(R.id.checkboxContainer);
         saveButton = findViewById(R.id.saveButton);
 
-        CO2checkBox.setChecked(prefsMain.getBoolean("show_co2", true));
-        TVOCcheckBox.setChecked(prefsMain.getBoolean("show_tvoc", true));
-        propanecheckBox.setChecked(prefsMain.getBoolean("show_propane", true));
-        COcheckBox.setChecked(prefsMain.getBoolean("show_co", true));
-        smokecheckBox.setChecked(prefsMain.getBoolean("show_smoke", true));
-        alcoholcheckBox.setChecked(prefsMain.getBoolean("show_alcohol", true));
-        methanecheckBox.setChecked(prefsMain.getBoolean("show_methane", true));
-        H2checkBox.setChecked(prefsMain.getBoolean("show_h2", true));
+        loadSettings();
 
-        CO2checkBox.setChecked(prefsStats.getBoolean("show_co2", true));
-        TVOCcheckBox.setChecked(prefsStats.getBoolean("show_tvoc", true));
-        propanecheckBox.setChecked(prefsStats.getBoolean("show_propane", true));
-        COcheckBox.setChecked(prefsStats.getBoolean("show_co", true));
-        smokecheckBox.setChecked(prefsStats.getBoolean("show_smoke", true));
-        alcoholcheckBox.setChecked(prefsStats.getBoolean("show_alcohol", true));
-        methanecheckBox.setChecked(prefsStats.getBoolean("show_methane", true));
-        H2checkBox.setChecked(prefsStats.getBoolean("show_h2", true));
-
-        saveButton.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View view) {
-                SharedPreferences.Editor editorMain = prefsMain.edit();
-                editorMain.putBoolean("show_co2", CO2checkBox.isChecked());
-                editorMain.putBoolean("show_tvoc", TVOCcheckBox.isChecked());
-                editorMain.putBoolean("show_propane", propanecheckBox.isChecked());
-                editorMain.putBoolean("show_co", COcheckBox.isChecked());
-                editorMain.putBoolean("show_smoke", smokecheckBox.isChecked());
-                editorMain.putBoolean("show_alcohol", alcoholcheckBox.isChecked());
-                editorMain.putBoolean("show_methane", methanecheckBox.isChecked());
-                editorMain.putBoolean("show_h2", H2checkBox.isChecked());
-                editorMain.apply();
-
-                SharedPreferences.Editor editorStats = prefsStats.edit();
-                editorStats.putBoolean("show_co2", CO2checkBox.isChecked());
-                editorStats.putBoolean("show_tvoc", TVOCcheckBox.isChecked());
-                editorStats.putBoolean("show_propane", propanecheckBox.isChecked());
-                editorStats.putBoolean("show_co", COcheckBox.isChecked());
-                editorStats.putBoolean("show_smoke", smokecheckBox.isChecked());
-                editorStats.putBoolean("show_alcohol", alcoholcheckBox.isChecked());
-                editorStats.putBoolean("show_methane", methanecheckBox.isChecked());
-                editorStats.putBoolean("show_h2", H2checkBox.isChecked());
-                editorStats.apply();
-
-                Toast.makeText(SettingsActivity.this, "Settings saved", Toast.LENGTH_SHORT).show();
-            }
+        saveButton.setOnClickListener(v -> {
+            saveSettings();
+            Toast.makeText(SettingsActivity.this, "Settings saved", Toast.LENGTH_SHORT).show();
         });
-
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
+    private void loadSettings() {
+        SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        Set<String> selectedPollutants = prefs.getStringSet("selectedPollutants", null);
+
+        if (selectedPollutants == null) {
+            // If no settings are saved, check all boxes by default
+            for (int i = 0; i < checkboxContainer.getChildCount(); i++) {
+                if (checkboxContainer.getChildAt(i) instanceof CheckBox) {
+                    ((CheckBox) checkboxContainer.getChildAt(i)).setChecked(true);
+                }
+            }
+        } else {
+            for (int i = 0; i < checkboxContainer.getChildCount(); i++) {
+                if (checkboxContainer.getChildAt(i) instanceof CheckBox) {
+                    CheckBox checkBox = (CheckBox) checkboxContainer.getChildAt(i);
+                    if (selectedPollutants.contains(checkBox.getText().toString())) {
+                        checkBox.setChecked(true);
+                    }
+                }
+            }
+        }
     }
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
+    private void saveSettings() {
+        SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        Set<String> selectedPollutants = new HashSet<>();
+        selectedPollutants.add("AQI"); // Always add AQI
 
-        if (id == android.R.id.home) {
-            onBackPressed();
-            return true;
-        } else if (id == R.id.action_home) {
-            startActivity(new Intent(this, MainActivity.class)
-                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
-            return true;
-        } else if (id == R.id.action_statistics) {
-            startActivity(new Intent(this, StatsActivity.class)
-                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
-            return true;
-        } else if (id == R.id.action_settings) {
-            // already here
-            return true;
+        for (int i = 0; i < checkboxContainer.getChildCount(); i++) {
+            if (checkboxContainer.getChildAt(i) instanceof CheckBox) {
+                CheckBox checkBox = (CheckBox) checkboxContainer.getChildAt(i);
+                if (checkBox.isChecked()) {
+                    selectedPollutants.add(checkBox.getText().toString());
+                }
+            }
         }
 
-        return super.onOptionsItemSelected(item);
+        editor.putStringSet("selectedPollutants", selectedPollutants);
+        editor.apply();
     }
 
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            onBackPressed();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
 }

@@ -1,20 +1,20 @@
 package com.example.ui_coen390;
 
 public class SensorReading {
-    public long timestamp;
-    public float co2;
-    public float tvoc;
-    public float aqi;
-    public float propane;
-    public float co;
-    public float smoke;
-    public float alcohol;
-    public float methane;
-    public float h2;
+    private final long timestamp;
+    private final float co2;
+    private final float tvoc;
+    private final float propane;
+    private final float co;
+    private final float smoke;
+    private final float alcohol;
+    private final float methane;
+    private final float h2;
+    private final float aqi;
 
-    public SensorReading(float co2, long timestamp, float tvoc, float propane, float co, float smoke, float alcohol, float methane, float h2, float aqi) {
-        this.co2 = co2;
+    public SensorReading(long timestamp, float co2, float tvoc, float propane, float co, float smoke, float alcohol, float methane, float h2, float aqi) {
         this.timestamp = timestamp;
+        this.co2 = co2;
         this.tvoc = tvoc;
         this.propane = propane;
         this.co = co;
@@ -25,75 +25,43 @@ public class SensorReading {
         this.aqi = aqi;
     }
 
-    public float getH2() {
-        return h2;
-    }
-
-    public void setH2(float h2) {
-        this.h2 = h2;
-    }
-
-    public float getMethane() {
-        return methane;
-    }
-
-    public void setMethane(float methane) {
-        this.methane = methane;
-    }
-
-    public float getAlcohol() {
-        return alcohol;
-    }
-
-    public void setAlcohol(float alcohol) {
-        this.alcohol = alcohol;
-    }
-
-    public float getCo() {
-        return co;
-    }
-
-    public void setCo(float co) {
-        this.co = co;
-    }
-
-    public float getSmoke() {
-        return smoke;
-    }
-
-    public void setSmoke(float smoke) {
-        this.smoke = smoke;
-    }
-
-    public float getAqi() {
-        return aqi;
-    }
-
-    public void setAqi(float aqi) {
-        this.aqi = aqi;
-    }
-
-    public float getPropane() {
-        return propane;
-    }
-
-    public void setPropane(float propane) {
-        this.propane = propane;
-    }
-
-    public float getTvoc() {
-        return tvoc;
-    }
-
-    public void setTvoc(float tvoc) {
-        this.tvoc = tvoc;
+    public long getTimestamp() {
+        return timestamp;
     }
 
     public float getCo2() {
         return co2;
     }
 
-    public void setCo2(float co2) {
-        this.co2 = co2;
+    public float getTvoc() {
+        return tvoc;
+    }
+
+    public float getPropane() {
+        return propane;
+    }
+
+    public float getCo() {
+        return co;
+    }
+
+    public float getSmoke() {
+        return smoke;
+    }
+
+    public float getAlcohol() {
+        return alcohol;
+    }
+
+    public float getMethane() {
+        return methane;
+    }
+
+    public float getH2() {
+        return h2;
+    }
+
+    public float getAqi() {
+        return aqi;
     }
 }

@@ -12,10 +12,14 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Build;
@@ -26,28 +30,25 @@ import android.provider.Settings;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.Button;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.appbar.MaterialToolbar;
-import com.example.ui_coen390.databinding.ActivityMainBinding;
-import com.google.android.material.appbar.MaterialToolbar;
 
-import java.io.FileWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
-
-import org.json.JSONArray;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -68,70 +69,121 @@ public class MainActivity extends AppCompatActivity {
     private static final UUID SERVICE_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
     private static final UUID CHARACTERISTIC_UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E");
 
-    private TextView co2LabelTextView;
-    private TextView tvocLabelTextView;
-    private TextView propaneLabelTextView;
-    private TextView coLabelTextView;
-    private TextView smokeLabelTextView;
-    private TextView alcoholLabelTextView;
-    private TextView methaneLabelTextView;
-    private TextView h2LabelTextView;
-    private TextView co2TextView;
-    private TextView tvocTextView;
-    private TextView propaneTextView;
-    private TextView coTextView;
-    private TextView smokeTextView;
-    private TextView alcoholTextView;
-    private TextView methaneTextView;
-    private TextView h2TextView;
-    private TextView indexTextView;
-
     private Button connectButton;
     private DatabaseHelper myDb;
+    private RecyclerView pollutantsRecyclerView;
+    private PollutantAdapter pollutantAdapter;
+    private List<Pollutant> pollutantList;
 
-    //****** Mock/demo mode: run the app without any Bluetooth hardware **************************************************************************
-    //private static final boolean MOCK_MODE = true; //to disable mock mode and use real hardware, comment this line
-    private static final boolean MOCK_MODE = false; //to disable mock mode and use real hardware, uncomment this line
+    private static final boolean MOCK_MODE = true;
+
+    // Receiver to get mock updates from MockDataService
+    private BroadcastReceiver mockReceiver;
+    private final Runnable statsPoller = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                android.content.SharedPreferences stats = getSharedPreferences("stats", MODE_PRIVATE);
+                if (stats.contains("co2") || stats.contains("tvoc") || stats.contains("aqi")) {
+                    float co2 = stats.getFloat("co2", Float.NaN);
+                    float tvoc = stats.getFloat("tvoc", Float.NaN);
+                    float propane = stats.getFloat("propane", Float.NaN);
+                    float co = stats.getFloat("co", Float.NaN);
+                    float smoke = stats.getFloat("smoke", Float.NaN);
+                    float alcohol = stats.getFloat("alcohol", Float.NaN);
+                    float methane = stats.getFloat("methane", Float.NaN);
+                    float h2 = stats.getFloat("h2", Float.NaN);
+                    float aqi = stats.getFloat("aqi", Float.NaN);
+
+                    for (Pollutant pollutant : pollutantList) {
+                        switch (pollutant.getName()) {
+                            case "CO2":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppm", co2));
+                                break;
+                            case "TVOC":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", tvoc));
+                                break;
+                            case "AQI":
+                                pollutant.setValue(String.format(Locale.US, "%.2f", aqi));
+                                break;
+                            case "Propane":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", propane));
+                                break;
+                            case "CO":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppm", co));
+                                break;
+                            case "Smoke":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", smoke));
+                                break;
+                            case "Alcohol":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", alcohol));
+                                break;
+                            case "Methane":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", methane));
+                                break;
+                            case "H2":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", h2));
+                                break;
+                        }
+                    }
+                    pollutantAdapter.notifyDataSetChanged();
+                }
+            } catch (Exception ignored) {}
+            // schedule next poll
+            handler.postDelayed(this, 1000);
+        }
+    };
 
     private final Runnable mockUpdater = new Runnable() {
         @Override public void run() {
             // Generate simple fake values
             float co2  = 350 + (float)(Math.random() * 300);  // ppm
             float tvoc =  2  + (float)(Math.random() * 40);   // ppb
-            float propane = 0.5f + (float)(Math.random() * 10.0f);  // 0.5 - 10.5 ppm
-            float co   =   0 + (float)(Math.random() * 50);    // ppm (e.g., 0–50)
-            float smoke   = 0f   + (float)(Math.random() * 40.0f);  // 0 - 40 ppm
-            float alcohol = 0f   + (float)(Math.random() * 8.0f);   // 0 - 8 ppm
-            float methane = 0 + (float)(Math.random() * 5);    // ppm (e.g., 0–5)
-            float h2      = 0f   + (float)(Math.random() * 50.0f);  // 0 - 50 ppm
-            float aqi = calcSimpleIndex(co2, tvoc, co, methane, propane, smoke, alcohol, h2);
+            float propane = 10 + (float)(Math.random() * 20);   // ppb
+            float co = 1 + (float)(Math.random() * 10);   // ppm
+            float smoke = 5 + (float)(Math.random() * 15);   // ppb
+            float alcohol = 1 + (float)(Math.random() * 5);   // ppb
+            float methane = 1 + (float)(Math.random() * 5);   // ppb
+            float h2 = 1 + (float)(Math.random() * 5);   // ppb
+            float aqi = calcSimpleIndex(co2, tvoc);
+
+            long timestamp = System.currentTimeMillis() / 1000;
+            myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
 
             runOnUiThread(() -> {
-                co2TextView.setText(String.format(Locale.US, "%.0f ppm", co2));
-                tvocTextView.setText(String.format(Locale.US, "%.0f ppb", tvoc));
-                propaneTextView.setText(String.format(Locale.US, "%.0f ppm", propane));
-                coTextView.setText(String.format(Locale.US, "%.0f ppm", co));
-                smokeTextView.setText(String.format(Locale.US, "%.0f ppm", smoke));
-                alcoholTextView.setText(String.format(Locale.US, "%.0f ppm", alcohol));
-                methaneTextView.setText(String.format(Locale.US, "%.0f ppm", methane));
-                h2TextView.setText(String.format(Locale.US, "%.0f ppm", h2));
-                indexTextView.setText(String.format(Locale.US, "%.0f ppb", aqi));
+                for (Pollutant pollutant : pollutantList) {
+                    switch (pollutant.getName()) {
+                        case "CO2":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppm", co2));
+                            break;
+                        case "TVOC":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", tvoc));
+                            break;
+                        case "AQI":
+                            pollutant.setValue(String.format(Locale.US, "%.2f", aqi));
+                            break;
+                        case "Propane":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", propane));
+                            break;
+                        case "CO":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppm", co));
+                            break;
+                        case "Smoke":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", smoke));
+                            break;
+                        case "Alcohol":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", alcohol));
+                            break;
+                        case "Methane":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", methane));
+                            break;
+                        case "H2":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", h2));
+                            break;
+                    }
+                }
+                pollutantAdapter.notifyDataSetChanged();
             });
-
-            // Save latest values for the Stats screen (in-scope variables)
-            getSharedPreferences("stats", MODE_PRIVATE).edit()
-                    .putFloat("co2", co2)
-                    .putFloat("tvoc", tvoc)
-                    .putFloat("propane", propane)
-                    .putFloat("co", co)
-                    .putFloat("smoke", smoke)
-                    .putFloat("alcohol", alcohol)
-                    .putFloat("methane", methane)
-                    .putFloat("h2", h2)
-                    .putFloat("aqi", calcSimpleIndex(co2, tvoc, co, methane, propane, smoke, alcohol, h2))
-                    .apply();
-
-            saveReading( co2,  tvoc,  aqi,  propane,  co,  smoke,  alcohol,  methane,  h2);
 
             handler.postDelayed(this, 2000); // update every 2 seconds
         }
@@ -139,124 +191,96 @@ public class MainActivity extends AppCompatActivity {
 
     private void startMockMode() {
         runOnUiThread(() -> {
-            co2TextView.setText("Connecting...");
-            tvocTextView.setText("Connecting...");
-            propaneTextView.setText("Connecting...");
-            coTextView.setText("Connecting...");
-            smokeTextView.setText("Connecting...");
-            alcoholTextView.setText("Connecting...");
-            methaneTextView.setText("Connecting...");
-            h2TextView.setText("Connecting...");
-            indexTextView.setText("Connecting...");
+            for (Pollutant pollutant : pollutantList) {
+                pollutant.setValue("Connecting...");
+            }
+            pollutantAdapter.notifyDataSetChanged();
             connectButton.setEnabled(false);
         });
-        handler.postDelayed(() -> {
-            connectButton.setEnabled(true);
-            connectButton.setText("Demo Running");
-            mockUpdater.run(); // start periodic fake data
-        }, 800);
+
+        // Start background service that generates mock data and writes to DB
+        Intent svc = new Intent(this, MockDataService.class);
+        startService(svc);
+
+        // Register a local broadcast receiver to receive UI updates from the service
+        if (mockReceiver == null) {
+            mockReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    // Update pollutant values on the UI thread
+                    runOnUiThread(() -> {
+                        float co2 = intent.getFloatExtra("co2", Float.NaN);
+                        float tvoc = intent.getFloatExtra("tvoc", Float.NaN);
+                        float propane = intent.getFloatExtra("propane", Float.NaN);
+                        float co = intent.getFloatExtra("co", Float.NaN);
+                        float smoke = intent.getFloatExtra("smoke", Float.NaN);
+                        float alcohol = intent.getFloatExtra("alcohol", Float.NaN);
+                        float methane = intent.getFloatExtra("methane", Float.NaN);
+                        float h2 = intent.getFloatExtra("h2", Float.NaN);
+                        float aqi = intent.getFloatExtra("aqi", Float.NaN);
+
+                        for (Pollutant pollutant : pollutantList) {
+                            switch (pollutant.getName()) {
+                                case "CO2":
+                                    pollutant.setValue(String.format(Locale.US, "%.2f ppm", co2));
+                                    break;
+                                case "TVOC":
+                                    pollutant.setValue(String.format(Locale.US, "%.2f ppb", tvoc));
+                                    break;
+                                case "AQI":
+                                    pollutant.setValue(String.format(Locale.US, "%.2f", aqi));
+                                    break;
+                                case "Propane":
+                                    pollutant.setValue(String.format(Locale.US, "%.2f ppb", propane));
+                                    break;
+                                case "CO":
+                                    pollutant.setValue(String.format(Locale.US, "%.2f ppm", co));
+                                    break;
+                                case "Smoke":
+                                    pollutant.setValue(String.format(Locale.US, "%.2f ppb", smoke));
+                                    break;
+                                case "Alcohol":
+                                    pollutant.setValue(String.format(Locale.US, "%.2f ppb", alcohol));
+                                    break;
+                                case "Methane":
+                                    pollutant.setValue(String.format(Locale.US, "%.2f ppb", methane));
+                                    break;
+                                case "H2":
+                                    pollutant.setValue(String.format(Locale.US, "%.2f ppb", h2));
+                                    break;
+                            }
+                        }
+                        pollutantAdapter.notifyDataSetChanged();
+                        connectButton.setText(R.string.status_connected);
+                        connectButton.setEnabled(true);
+                    });
+                }
+            };
+            LocalBroadcastManager.getInstance(this).registerReceiver(mockReceiver, new IntentFilter("mock-data-update"));
+        }
+
+        // Start polling SharedPreferences for latest stats as a fallback to updates
+        handler.removeCallbacks(statsPoller);
+        handler.post(statsPoller);
     }
 
-    private float calcSimpleIndex(float co2, float tvoc, float co, float methane, float propane, float smoke, float alcohol, float h2) {
-        // Normalize each sensor to a 0-500 "score" and return the worst (max) score.
-        float co2Score      = Math.min(500f, co2 / 2f);            // e.g., 1000 ppm -> 500
-        float tvocScore     = Math.min(500f, tvoc * 5f);           // e.g., 100 ppb -> 500
-        float coScore       = Math.min(500f, co * 10f);            // e.g., 50 ppm -> 500
-        float methaneScore  = Math.min(500f, methane * 100f);     // e.g., 5 ppm -> 500
-        float propaneScore  = Math.min(500f, propane * 50f);       // maps ~10 ppm -> 500
-        float smokeScore    = Math.min(500f, smoke * 12.5f);       // maps ~40 ppm -> 500
-        float alcoholScore  = Math.min(500f, alcohol * 62.5f);     // maps ~8 ppm -> 500
-        float h2Score       = Math.min(500f, h2 * 10f);            // maps ~50 ppm -> 500
-
-        float max1 = Math.max(co2Score, tvocScore);
-        float max2 = Math.max(coScore, methaneScore);
-        float max3 = Math.max(propaneScore, smokeScore);
-        float max4 = Math.max(alcoholScore, h2Score);
-
-        return Math.max(Math.max(max1, max2), Math.max(max3, max4));
-    }
-    //*******************************************************************************************************************************************
-
-    private void updateFromPrefs() {
-        android.content.SharedPreferences prefs = getSharedPreferences("sensor_prefs", MODE_PRIVATE);
-
-        boolean showCO2 = prefs.getBoolean("show_co2", true);
-        boolean showTVOC = prefs.getBoolean("show_tvoc", true);
-        boolean showPropane = prefs.getBoolean("show_propane", true);
-        boolean showCO = prefs.getBoolean("show_co", true);
-        boolean showSmoke = prefs.getBoolean("show_smoke", true);
-        boolean showAlcohol = prefs.getBoolean("show_alcohol", true);
-        boolean showMethane = prefs.getBoolean("show_methane", true);
-        boolean showH2 = prefs.getBoolean("show_h2", true);
-
-        // Map preferences to your UI elements
-        co2TextView.setVisibility(showCO2 ? View.VISIBLE : View.INVISIBLE);
-        co2LabelTextView.setVisibility(showCO2 ? View.VISIBLE : View.INVISIBLE);
-        tvocTextView.setVisibility(showTVOC ? View.VISIBLE : View.INVISIBLE);
-        tvocLabelTextView.setVisibility(showTVOC ? View.VISIBLE : View.INVISIBLE);
-        propaneTextView.setVisibility(showPropane ? View.VISIBLE : View.INVISIBLE);
-        propaneLabelTextView.setVisibility(showPropane ? View.VISIBLE : View.INVISIBLE);
-        coTextView.setVisibility(showCO ? View.VISIBLE : View.INVISIBLE);
-        coLabelTextView.setVisibility(showCO ? View.VISIBLE : View.INVISIBLE);
-        smokeTextView.setVisibility(showSmoke ? View.VISIBLE : View.INVISIBLE);
-        smokeLabelTextView.setVisibility(showSmoke ? View.VISIBLE : View.INVISIBLE);
-        alcoholTextView.setVisibility(showAlcohol ? View.VISIBLE : View.INVISIBLE);
-        alcoholLabelTextView.setVisibility(showAlcohol ? View.VISIBLE : View.INVISIBLE);
-        methaneTextView.setVisibility(showMethane ? View.VISIBLE : View.INVISIBLE);
-        methaneLabelTextView.setVisibility(showMethane ? View.VISIBLE : View.INVISIBLE);
-        h2TextView.setVisibility(showH2 ? View.VISIBLE : View.INVISIBLE);
-        h2LabelTextView.setVisibility(showH2 ? View.VISIBLE : View.INVISIBLE);
-
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        updateFromPrefs();
+    private float calcSimpleIndex(float co2, float tvoc) {
+        // Simple placeholder for demo (0–500-ish)
+        float co2Score  = Math.min(500f, co2 / 2f);  // e.g., 1000 ppm -> 500
+        float tvocScore = Math.min(500f, tvoc * 5f); // e.g., 100 ppb -> 500
+        return Math.max(co2Score, tvocScore);
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
-        setContentView(binding.getRoot());
+        setContentView(R.layout.activity_main);
 
         MaterialToolbar toolbar = findViewById(R.id.topAppBar);
         setSupportActionBar(toolbar);
 
         myDb = new DatabaseHelper(this);
-        co2TextView = findViewById(R.id.CO2TextView);
-        co2LabelTextView = findViewById(R.id.co2LabelTextView);
-        tvocTextView = findViewById(R.id.TVOCTextView);
-        tvocLabelTextView = findViewById(R.id.tvocLabelTextView);
-        propaneTextView = findViewById(R.id.PropaneTextView);
-        propaneLabelTextView = findViewById(R.id.propaneLabelTextView);
-        coTextView = findViewById(R.id.COTextView);
-        coLabelTextView = findViewById(R.id.coLabelTextView);
-        smokeTextView = findViewById(R.id.SmokeTextView);
-        smokeLabelTextView = findViewById(R.id.smokeLabelTextView);
-        alcoholTextView = findViewById(R.id.AlcoholTextView);
-        alcoholLabelTextView = findViewById(R.id.alcoholLabelTextView);
-        methaneTextView = findViewById(R.id.MethaneTextView);
-        methaneLabelTextView = findViewById(R.id.methaneLabelTextView);
-        h2TextView = findViewById(R.id.H2TextView);
-        h2LabelTextView = findViewById(R.id.h2LabelTextView);
-
-        indexTextView = findViewById(R.id.indexTextView);
-        updateFromPrefs();
-
-        connectButton = findViewById(R.id.homeButton); // Using homeButton as connect button
-
-        co2TextView.setText(R.string.status_disconnected);
-        tvocTextView.setText(R.string.status_disconnected);
-        propaneTextView.setText(R.string.status_disconnected);
-        coTextView.setText(R.string.status_disconnected);
-        smokeTextView.setText(R.string.status_disconnected);
-        alcoholTextView.setText(R.string.status_disconnected);
-        methaneTextView.setText(R.string.status_disconnected);
-        h2TextView.setText(R.string.status_disconnected);
-        indexTextView.setText(R.string.status_disconnected);
+        connectButton = findViewById(R.id.homeButton);
 
         final BluetoothManager bluetoothManager =
                 (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
@@ -268,27 +292,195 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        if (MOCK_MODE) {
-            connectButton.setOnClickListener(v -> {
-                Log.d(TAG, "Demo mode: skipping BLE, starting fake updates.");
+        connectButton.setOnClickListener(v -> {
+            Log.d(TAG, "Connect button pressed.");
+            if (MOCK_MODE) {
+                Log.d(TAG, "Demo mode: starting fake updates.");
                 startMockMode();
-            });
-        } else {
-            connectButton.setOnClickListener(v -> {
-                Log.d(TAG, "Connect button pressed.");
+            } else {
                 handleConnectionRequest();  // real BLE path
-            });
-        }
+            }
+        });
+
+        setupRecyclerView();
     }
 
     @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        // Optionally refresh UI or data if needed
+    protected void onResume() {
+        super.onResume();
+        // Refresh the list of pollutants when returning from settings
+        // Preserve existing values where possible instead of resetting to "Disconnected"
+        List<Pollutant> existing = new ArrayList<>(pollutantList);
+        List<Pollutant> updated = getPollutantsFromSettings();
+        for (Pollutant p : updated) {
+            // try to preserve value from existing list
+            boolean found = false;
+            for (Pollutant old : existing) {
+                if (old.getName().equals(p.getName())) {
+                    p.setValue(old.getValue());
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                p.setValue("Disconnected");
+            }
+        }
+        pollutantList.clear();
+        pollutantList.addAll(updated);
+        pollutantAdapter.notifyDataSetChanged();
+
+        // Try to populate UI immediately from last saved stats so we don't show "Connecting..." forever
+        try {
+            android.content.SharedPreferences stats = getSharedPreferences("stats", MODE_PRIVATE);
+            boolean hasAny = stats.contains("co2") || stats.contains("tvoc") || stats.contains("aqi");
+            if (hasAny) {
+                float co2 = stats.getFloat("co2", Float.NaN);
+                float tvoc = stats.getFloat("tvoc", Float.NaN);
+                float propane = stats.getFloat("propane", Float.NaN);
+                float co = stats.getFloat("co", Float.NaN);
+                float smoke = stats.getFloat("smoke", Float.NaN);
+                float alcohol = stats.getFloat("alcohol", Float.NaN);
+                float methane = stats.getFloat("methane", Float.NaN);
+                float h2 = stats.getFloat("h2", Float.NaN);
+                float aqi = stats.getFloat("aqi", Float.NaN);
+
+                for (Pollutant pollutant : pollutantList) {
+                    switch (pollutant.getName()) {
+                        case "CO2":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppm", co2));
+                            break;
+                        case "TVOC":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", tvoc));
+                            break;
+                        case "AQI":
+                            pollutant.setValue(String.format(Locale.US, "%.2f", aqi));
+                            break;
+                        case "Propane":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", propane));
+                            break;
+                        case "CO":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppm", co));
+                            break;
+                        case "Smoke":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", smoke));
+                            break;
+                        case "Alcohol":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", alcohol));
+                            break;
+                        case "Methane":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", methane));
+                            break;
+                        case "H2":
+                            pollutant.setValue(String.format(Locale.US, "%.2f ppb", h2));
+                            break;
+                    }
+                }
+                pollutantAdapter.notifyDataSetChanged();
+            }
+        } catch (Exception e) {
+            // ignore and fall back to broadcast updates
+        }
+
+        // If SharedPreferences didn't provide values (or some values are NaN), try reading the latest DB row as a fallback
+        boolean needsDbFallback = false;
+        for (Pollutant p : pollutantList) {
+            String v = p.getValue();
+            if (v == null || v.isEmpty() || v.equals("Disconnected") || v.equals("Connecting...") || v.contains("NaN")) {
+                needsDbFallback = true;
+                break;
+            }
+        }
+
+        if (needsDbFallback) {
+            try {
+                java.util.ArrayList<SensorReading> last = myDb.getLastNReadings(1);
+                if (last != null && !last.isEmpty()) {
+                    SensorReading r = last.get(0);
+                    for (Pollutant pollutant : pollutantList) {
+                        switch (pollutant.getName()) {
+                            case "CO2":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppm", r.getCo2()));
+                                break;
+                            case "TVOC":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", r.getTvoc()));
+                                break;
+                            case "AQI":
+                                pollutant.setValue(String.format(Locale.US, "%.2f", r.getAqi()));
+                                break;
+                            case "Propane":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", r.getPropane()));
+                                break;
+                            case "CO":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppm", r.getCo()));
+                                break;
+                            case "Smoke":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", r.getSmoke()));
+                                break;
+                            case "Alcohol":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", r.getAlcohol()));
+                                break;
+                            case "Methane":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", r.getMethane()));
+                                break;
+                            case "H2":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", r.getH2()));
+                                break;
+                        }
+                    }
+                    pollutantAdapter.notifyDataSetChanged();
+                }
+            } catch (Exception ex) {
+                // ignore fallback failure
+            }
+        }
+
+        // Note: mockReceiver registration happens only when startMockMode() is invoked
+    }
+
+    private void setupRecyclerView() {
+        pollutantsRecyclerView = findViewById(R.id.pollutantsRecyclerView);
+        pollutantsRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        pollutantList = getPollutantsFromSettings();
+        pollutantAdapter = new PollutantAdapter(pollutantList);
+        pollutantsRecyclerView.setAdapter(pollutantAdapter);
+    }
+
+    private List<Pollutant> getPollutantsFromSettings() {
+        SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        Set<String> selectedPollutants = prefs.getStringSet("selectedPollutants", null);
+        List<Pollutant> pollutants = new ArrayList<>();
+
+        // Always add AQI at the top
+        pollutants.add(new Pollutant("AQI", "Disconnected"));
+
+        if (selectedPollutants == null) {
+            // If no settings are saved, add all pollutants by default
+            pollutants.add(new Pollutant("CO2", "Disconnected"));
+            pollutants.add(new Pollutant("TVOC", "Disconnected"));
+            pollutants.add(new Pollutant("Propane", "Disconnected"));
+            pollutants.add(new Pollutant("CO", "Disconnected"));
+            pollutants.add(new Pollutant("Smoke", "Disconnected"));
+            pollutants.add(new Pollutant("Alcohol", "Disconnected"));
+            pollutants.add(new Pollutant("Methane", "Disconnected"));
+            pollutants.add(new Pollutant("H2", "Disconnected"));
+        } else {
+            for (String pollutantName : selectedPollutants) {
+                if (!pollutantName.equals("AQI")) { // Avoid duplicates
+                    pollutants.add(new Pollutant(pollutantName, "Disconnected"));
+                }
+            }
+        }
+
+        return pollutants;
     }
 
     private void handleConnectionRequest() {
+        if (!bluetoothAdapter.isEnabled()) {
+            Toast.makeText(this, "Please enable Bluetooth", Toast.LENGTH_LONG).show();
+            return;
+        }
+
         if (!isLocationEnabled()) {
             Toast.makeText(this, "Please enable Location Services for BLE scanning", Toast.LENGTH_LONG).show();
             Intent locationIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
@@ -340,7 +532,7 @@ public class MainActivity extends AppCompatActivity {
             }
             if (allGranted) {
                 Log.d(TAG, "All permissions granted. Starting scan.");
-                startScan();
+                handleConnectionRequest();
             } else {
                 Log.w(TAG, "Not all permissions were granted.");
                 Toast.makeText(this, "Permissions are required for BLE functionality.", Toast.LENGTH_LONG).show();
@@ -348,41 +540,46 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private void startScan() {
         if (MOCK_MODE) return;  // mock guard
 
-        if (!checkAndRequestPermissions()) {
-            Log.w(TAG, "startScan called without all necessary permissions.");
+        if (!bluetoothAdapter.isEnabled()) {
+            Toast.makeText(this, "Bluetooth is not enabled.", Toast.LENGTH_SHORT).show();
             return;
         }
 
         bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
+        if (bluetoothLeScanner == null) {
+            Log.e(TAG, "Failed to get BLE scanner, is Bluetooth enabled?");
+            Toast.makeText(this, "Could not start scan. Is Bluetooth on?", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+
         if (!scanning) {
             Log.d(TAG, "Starting BLE scan...");
             handler.postDelayed(() -> {
                 if (scanning) {
                     scanning = false;
-                    //noinspection MissingPermission
                     bluetoothLeScanner.stopScan(leScanCallback);
                     Log.d(TAG, "Scan stopped after timeout.");
                 }
             }, SCAN_PERIOD);
             scanning = true;
-            //noinspection MissingPermission
             bluetoothLeScanner.startScan(leScanCallback);
         } else {
             scanning = false;
-            //noinspection MissingPermission
             bluetoothLeScanner.stopScan(leScanCallback);
             Log.d(TAG, "Scan stopped manually.");
         }
     }
 
+    @SuppressLint("MissingPermission")
     private void stopScan() {
         if (MOCK_MODE) return;  // mock guard
 
-        if (scanning) {
-            //noinspection MissingPermission
+        if (scanning && bluetoothLeScanner != null) { // also check if scanner is not null
             bluetoothLeScanner.stopScan(leScanCallback);
             scanning = false;
             Log.d(TAG, "Scan stopped.");
@@ -390,17 +587,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private final ScanCallback leScanCallback = new ScanCallback() {
+        @SuppressLint("MissingPermission")
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
             super.onScanResult(callbackType, result);
             BluetoothDevice device = result.getDevice();
-            //noinspection MissingPermission
             Log.d(TAG, "Device found: " + device.getName() + " with address: " + device.getAddress());
-            //noinspection MissingPermission
             if (DEVICE_ADDRESS.equalsIgnoreCase(device.getAddress())) {
                 Log.i(TAG, "Target device found! Address: " + device.getAddress());
-                scanning=false;
-                bluetoothLeScanner.stopScan(leScanCallback);
+                if (bluetoothLeScanner != null) {
+                    scanning=false;
+                    bluetoothLeScanner.stopScan(leScanCallback);
+                }
 
                 // Also cancel the 10-second timeout handler to prevent it from firing later
                 handler.removeCallbacksAndMessages(null);
@@ -409,10 +607,10 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    @SuppressLint("MissingPermission")
     private void connectDevice(BluetoothDevice device) {
         Log.d(TAG, "Attempting to connect to device: " + device.getAddress());
         stopScan();
-        //noinspection MissingPermission
         bluetoothGatt = device.connectGatt(this, false, gattCallback);
     }
 
@@ -420,7 +618,6 @@ public class MainActivity extends AppCompatActivity {
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            //noinspection MissingPermission
             String deviceAddress = gatt.getDevice().getAddress();
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -430,20 +627,14 @@ public class MainActivity extends AppCompatActivity {
                         connectButton.setText(R.string.status_connected);
                         connectButton.setEnabled(false);
                     });
-                    //noinspection MissingPermission
                     gatt.discoverServices();
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     Log.i(TAG, "Successfully disconnected from " + deviceAddress);
                     runOnUiThread(() -> {
-                        co2TextView.setText(R.string.status_disconnected);
-                        tvocTextView.setText(R.string.status_disconnected);
-                        propaneTextView.setText(R.string.status_disconnected);
-                        coTextView.setText(R.string.status_disconnected);
-                        smokeTextView.setText(R.string.status_disconnected);
-                        alcoholTextView.setText(R.string.status_disconnected);
-                        methaneTextView.setText(R.string.status_disconnected);
-                        h2TextView.setText(R.string.status_disconnected);
-                        indexTextView.setText(R.string.status_disconnected);
+                        for (Pollutant pollutant : pollutantList) {
+                            pollutant.setValue("Disconnected");
+                        }
+                        pollutantAdapter.notifyDataSetChanged();
                         connectButton.setText(R.string.status_connect);
                         connectButton.setEnabled(true);
                     });
@@ -451,20 +642,16 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Log.w(TAG, "Connection error with " + deviceAddress + ". Status: " + status);
                 runOnUiThread(() -> {
-                    co2TextView.setText(R.string.status_disconnected);
-                    tvocTextView.setText(R.string.status_disconnected);
-                    propaneTextView.setText(R.string.status_disconnected);
-                    coTextView.setText(R.string.status_disconnected);
-                    smokeTextView.setText(R.string.status_disconnected);
-                    alcoholTextView.setText(R.string.status_disconnected);
-                    methaneTextView.setText(R.string.status_disconnected);
-                    h2TextView.setText(R.string.status_disconnected);
-                    indexTextView.setText(R.string.status_disconnected);
+                    for (Pollutant pollutant : pollutantList) {
+                        pollutant.setValue("Disconnected");
+                    }
+                    pollutantAdapter.notifyDataSetChanged();
                     connectButton.setText(R.string.status_connect);
                     connectButton.setEnabled(true);
                 });
             }
         }
+
         //method to request bigger mtu to nimBLE to receive 32bit packet
         public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
             super.onMtuChanged(gatt, mtu, status);
@@ -476,6 +663,7 @@ public class MainActivity extends AppCompatActivity {
                 Log.w(TAG, "Failed to change MTU. Status: " + status);
             }
         }
+
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
@@ -486,14 +674,16 @@ public class MainActivity extends AppCompatActivity {
                     BluetoothGattCharacteristic characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
                     if (characteristic != null) {
                         Log.d(TAG, "Characteristic found: " + characteristic.getUuid());
-                        //noinspection MissingPermission
                         gatt.setCharacteristicNotification(characteristic, true);
                         UUID cccdUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
                         BluetoothGattDescriptor descriptor = characteristic.getDescriptor(cccdUuid);
-                        //noinspection deprecation, MissingPermission
-                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                        //noinspection deprecation, MissingPermission
-                        gatt.writeDescriptor(descriptor);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                        } else {
+                            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                            gatt.writeDescriptor(descriptor);
+                        }
+
                     } else {
                         Log.e(TAG, "Characteristic not found: " + CHARACTERISTIC_UUID);
                     }
@@ -520,7 +710,6 @@ public class MainActivity extends AppCompatActivity {
         @Override
         @SuppressWarnings("deprecation")
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            //noinspection deprecation
             handleCharacteristicChanged(characteristic.getValue());
         }
 
@@ -547,61 +736,92 @@ public class MainActivity extends AppCompatActivity {
                     Log.w(TAG, "Failed to insert data into DB");
                 }
 
-                // Save latest for Stats screen in real BLE mode too
-                getSharedPreferences("stats", MODE_PRIVATE).edit()
-                        .putFloat("co2", co2)
-                        .putFloat("tvoc", tvoc)
-                        .putFloat("aqi", calcSimpleIndex(co2, tvoc, co, methane, propane, smoke, alcohol, h2))
-                        .apply();
-
+        // Save latest for Stats screen in real BLE mode too
+        getSharedPreferences("stats", MODE_PRIVATE).edit()
+            .putLong("timestamp", timestamp)
+            .putFloat("co2", co2)
+            .putFloat("tvoc", tvoc)
+            .putFloat("aqi", aqi)
+            .putFloat("propane", propane)
+            .putFloat("co", co)
+            .putFloat("smoke", smoke)
+            .putFloat("alcohol", alcohol)
+            .putFloat("methane", methane)
+            .putFloat("h2", h2)
+            .apply();
 
                 runOnUiThread(() -> {
-                    co2TextView.setText(String.format(Locale.US, "%.2f ppm", co2));
-                    tvocTextView.setText(String.format(Locale.US, "%.2f ppb", tvoc));
-                    propaneTextView.setText(String.format(Locale.US, "%.2f ppm", propane));
-                    coTextView.setText(String.format(Locale.US, "%.2f ppm", co));
-                    smokeTextView.setText(String.format(Locale.US, "%.2f ppm", smoke));
-                    alcoholTextView.setText(String.format(Locale.US, "%.2f ppm", alcohol));
-                    methaneTextView.setText(String.format(Locale.US, "%.2f ppm", methane));
-                    h2TextView.setText(String.format(Locale.US, "%.2f ppm", h2));
-                    indexTextView.setText(String.format(Locale.US, "%.2f", aqi));
+                    for (Pollutant pollutant : pollutantList) {
+                        switch (pollutant.getName()) {
+                            case "CO2":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppm", co2));
+                                break;
+                            case "TVOC":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", tvoc));
+                                break;
+                            case "AQI":
+                                pollutant.setValue(String.format(Locale.US, "%.2f", aqi));
+                                break;
+                            case "Propane":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", propane));
+                                break;
+                            case "CO":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppm", co));
+                                break;
+                            case "Smoke":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", smoke));
+                                break;
+                            case "Alcohol":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", alcohol));
+                                break;
+                            case "Methane":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", methane));
+                                break;
+                            case "H2":
+                                pollutant.setValue(String.format(Locale.US, "%.2f ppb", h2));
+                                break;
+                        }
+                    }
+                    pollutantAdapter.notifyDataSetChanged();
                 });
             } else {
                 Log.w(TAG, "Received malformed data packet. Length: " + (data != null ? data.length : 0));
                 runOnUiThread(() -> {
-                    co2TextView.setText(R.string.status_error);
-                    tvocTextView.setText(R.string.status_error);
-                    propaneTextView.setText(R.string.status_error);
-                    coTextView.setText(R.string.status_error);
-                    smokeTextView.setText(R.string.status_error);
-                    alcoholTextView.setText(R.string.status_error);
-                    methaneTextView.setText(R.string.status_error);
-                    h2TextView.setText(R.string.status_error);
-                    indexTextView.setText(R.string.status_error);
+                    for (Pollutant pollutant : pollutantList) {
+                        pollutant.setValue("Error");
+                    }
+                    pollutantAdapter.notifyDataSetChanged();
                 });
             }
         }
     };
 
+    @SuppressLint("MissingPermission")
     @Override
     protected void onPause() {
         super.onPause();
         stopScan();
-        if (bluetoothGatt != null) {
-            //noinspection MissingPermission
-            Log.d(TAG, "Disconnecting from GATT server.");
-            //noinspection MissingPermission
-            bluetoothGatt.disconnect();
+        // Keep BLE connection and mock generator running while navigating between activities
+        // so long as the app remains in foreground/backstack. We only stop scanning.
+        if (mockReceiver != null) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(mockReceiver);
+            mockReceiver = null;
         }
+        // stop polling while paused
+        handler.removeCallbacks(statsPoller);
     }
 
+    @SuppressLint("MissingPermission")
     @Override
     protected void onDestroy() {
         super.onDestroy();
         if (bluetoothGatt != null) {
-            //noinspection MissingPermission
             bluetoothGatt.close();
             bluetoothGatt = null;
+        }
+        // Stop mock service ONLY if the activity is finishing (app closing)
+        if (MOCK_MODE && isFinishing()) {
+            stopService(new Intent(this, MockDataService.class));
         }
     }
 
@@ -614,24 +834,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_settings) {
-            startActivity(new Intent(this, SettingsActivity.class));
+        if (id == R.id.action_home) {
+            // Already on Home (MainActivity). Do nothing or refresh if you want.
             return true;
         } else if (id == R.id.action_statistics) {
-            startActivity(new Intent(this, StatsActivity.class));  //fix: go to Stats
+            startActivity(new Intent(this, StatsActivity.class));
             return true;
-        } else if (id == R.id.action_home) {
-            // Already on Home (MainActivity). Do nothing or refresh if you want.
+        } else if (id == R.id.action_settings) {
+            startActivity(new Intent(this, SettingsActivity.class));
             return true;
         }
         return super.onOptionsItemSelected(item);
-    }
-    private void saveReading(float co2, float tvoc, float aqi, float propane, float co, float smoke, float alcohol, float methane, float h2) {
-
-        long timestamp = System.currentTimeMillis() / 1000; // Unix timestamp in seconds
-
-        // Insert into SQLite database
-        myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
-
     }
 }
