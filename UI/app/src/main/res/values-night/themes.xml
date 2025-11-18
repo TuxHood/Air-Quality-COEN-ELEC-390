@@ -2,6 +2,10 @@
     <!-- Base application theme. -->
     <style name="Base.Theme.UI_COEN390" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+        <item name="colorPrimary">@color/primary_blue</item>
+        <item name="colorPrimaryVariant">@color/primary_dark_blue</item>
+        <item name="colorAccent">@color/accent_green</item>
     </style>
+
+    <style name="Theme.UI_COEN390" parent="Base.Theme.UI_COEN390" />
 </resources>
