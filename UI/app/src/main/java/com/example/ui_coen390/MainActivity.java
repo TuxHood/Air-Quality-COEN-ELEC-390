@@ -34,6 +34,7 @@ import android.widget.Button;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -44,9 +45,11 @@ import com.google.android.material.appbar.MaterialToolbar;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -77,6 +80,11 @@ public class MainActivity extends AppCompatActivity {
 
     private static final boolean MOCK_MODE = true;
 
+    // --- START: Added for Air Quality Alerts ---
+    private final Map<String, Long> lastAlertTimestamps = new HashMap<>();
+    private static final long ALERT_COOLDOWN = 5 * 60 * 100; // 5 minutes in milliseconds
+    // --- END: Added for Air Quality Alerts ---
+
     // Receiver to get mock updates from MockDataService
     private BroadcastReceiver mockReceiver;
     private final Runnable statsPoller = new Runnable() {
@@ -94,6 +102,8 @@ public class MainActivity extends AppCompatActivity {
                     float methane = stats.getFloat("methane", Float.NaN);
                     float h2 = stats.getFloat("h2", Float.NaN);
                     float aqi = stats.getFloat("aqi", Float.NaN);
+
+                    checkAirQualityLevels(co2, tvoc, co);
 
                     for (Pollutant pollutant : pollutantList) {
                         switch (pollutant.getName()) {
@@ -146,6 +156,8 @@ public class MainActivity extends AppCompatActivity {
             float methane = 1 + (float)(Math.random() * 5);   // ppb
             float h2 = 1 + (float)(Math.random() * 5);   // ppb
             float aqi = calcSimpleIndex(co2, tvoc);
+
+            checkAirQualityLevels(co2, tvoc, co);
 
             long timestamp = System.currentTimeMillis() / 1000;
             myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
@@ -219,6 +231,8 @@ public class MainActivity extends AppCompatActivity {
                         float h2 = intent.getFloatExtra("h2", Float.NaN);
                         float aqi = intent.getFloatExtra("aqi", Float.NaN);
 
+                        checkAirQualityLevels(co2, tvoc, co);
+
                         for (Pollutant pollutant : pollutantList) {
                             switch (pollutant.getName()) {
                                 case "CO2":
@@ -263,6 +277,55 @@ public class MainActivity extends AppCompatActivity {
         handler.removeCallbacks(statsPoller);
         handler.post(statsPoller);
     }
+
+    // --- START: Added for Air Quality Alerts ---
+    private void showAirQualityAlert(String pollutantName, String level, String recommendation) {
+        // Ensure this runs on the UI thread
+        runOnUiThread(() -> {
+            new AlertDialog.Builder(this)
+                    .setTitle("Air Quality Alert: High " + pollutantName)
+                    .setMessage("Current level: " + level + ".\n\nRecommendation: " + recommendation)
+                    .setPositiveButton("OK", (dialog, which) -> dialog.dismiss())
+                    .create()
+                    .show();
+        });
+    }
+
+    private void checkAirQualityLevels(float co2, float tvoc, float co) {
+        long currentTime = System.currentTimeMillis();
+
+        // --- Check TVOC Levels ---
+        // Source: U.S. Environmental Protection Agency (EPA) and various indoor air quality studies.
+        // > 660 ppb is considered high and may cause irritation.
+        if (tvoc > 660) {
+            if (!lastAlertTimestamps.containsKey("TVOC") || (currentTime - lastAlertTimestamps.get("TVOC") > ALERT_COOLDOWN)) {
+                lastAlertTimestamps.put("TVOC", currentTime);
+                showAirQualityAlert("TVOC", String.format(Locale.US, "%.2f ppb", tvoc), "Levels are high. Consider ventilating the area by opening a window or using an air purifier.");
+            }
+        }
+
+        // --- Check CO2 Levels ---
+        // Source: ASHRAE Standard 62.1.
+        // > 1000 ppm can lead to complaints of drowsiness and poor air quality.
+        // > 2000 ppm can cause headaches and decreased cognitive function.
+        if (co2 > 2000) {
+            if (!lastAlertTimestamps.containsKey("CO2") || (currentTime - lastAlertTimestamps.get("CO2") > ALERT_COOLDOWN)) {
+                lastAlertTimestamps.put("CO2", currentTime);
+                showAirQualityAlert("CO2", String.format(Locale.US, "%.2f ppm", co2), "Levels are very high, which can impact concentration and cause headaches. It is strongly recommended to get fresh air.");
+            }
+        }
+
+        // --- Check CO Levels ---
+        // Source: World Health Organization (WHO), EPA.
+        // > 9 ppm is the 8-hour exposure limit. Any sustained level above this is a concern.
+        if (co > 9) {
+            if (!lastAlertTimestamps.containsKey("CO") || (currentTime - lastAlertTimestamps.get("CO") > ALERT_COOLDOWN)) {
+                lastAlertTimestamps.put("CO", currentTime);
+                showAirQualityAlert("CO (Carbon Monoxide)", String.format(Locale.US, "%.2f ppm", co), "Potentially dangerous levels detected. Carbon Monoxide is hazardous. Ventilate the area immediately and consider leaving the room.");
+            }
+        }
+    }
+    // --- END: Added for Air Quality Alerts ---
 
     private float calcSimpleIndex(float co2, float tvoc) {
         // Simple placeholder for demo (0–500-ish)
@@ -345,6 +408,8 @@ public class MainActivity extends AppCompatActivity {
                 float h2 = stats.getFloat("h2", Float.NaN);
                 float aqi = stats.getFloat("aqi", Float.NaN);
 
+                checkAirQualityLevels(co2, tvoc, co);
+
                 for (Pollutant pollutant : pollutantList) {
                     switch (pollutant.getName()) {
                         case "CO2":
@@ -397,6 +462,9 @@ public class MainActivity extends AppCompatActivity {
                 java.util.ArrayList<SensorReading> last = myDb.getLastNReadings(1);
                 if (last != null && !last.isEmpty()) {
                     SensorReading r = last.get(0);
+
+                    checkAirQualityLevels(r.getCo2(), r.getTvoc(), r.getCo());
+
                     for (Pollutant pollutant : pollutantList) {
                         switch (pollutant.getName()) {
                             case "CO2":
@@ -727,6 +795,8 @@ public class MainActivity extends AppCompatActivity {
                 float methane = buffer.getFloat();
                 float h2 = buffer.getFloat();
                 float aqi = buffer.getFloat();
+
+                checkAirQualityLevels(co2, tvoc, co);
 
                 long timestamp = System.currentTimeMillis() / 1000;
                 boolean isInserted = myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
