@@ -104,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
                     float alcohol = stats.getFloat("alcohol", Float.NaN);
                     float methane = stats.getFloat("methane", Float.NaN);
                     float h2 = stats.getFloat("h2", Float.NaN);
-                    float aqi = stats.getFloat("aqi", Float.NaN);
+                    float aqi = calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
                     checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
@@ -158,9 +158,9 @@ public class MainActivity extends AppCompatActivity {
             float alcohol = 1 + (float)(Math.random() * 5);   // ppb
             float methane = 1 + (float)(Math.random() * 5);   // ppb
             float h2 = 1 + (float)(Math.random() * 5);   // ppb
-            float aqi = calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
             checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
+            float aqi = calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
             long timestamp = System.currentTimeMillis() / 1000;
             myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
@@ -232,10 +232,12 @@ public class MainActivity extends AppCompatActivity {
                         float alcohol = intent.getFloatExtra("alcohol", Float.NaN);
                         float methane = intent.getFloatExtra("methane", Float.NaN);
                         float h2 = intent.getFloatExtra("h2", Float.NaN);
-                        float aqi = intent.getFloatExtra("aqi", Float.NaN);
 
                         checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
-                        calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
+                        float aqi = calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
+
+
+                        //calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
 
                         for (Pollutant pollutant : pollutantList) {
@@ -910,7 +912,7 @@ public class MainActivity extends AppCompatActivity {
                 float alcohol = buffer.getFloat();
                 float methane = buffer.getFloat();
                 float h2 = buffer.getFloat();
-                float aqi = buffer.getFloat();
+                float aqi = calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
                 checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
                 calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
