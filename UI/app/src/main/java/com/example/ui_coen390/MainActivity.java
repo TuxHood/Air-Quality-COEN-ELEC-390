@@ -30,7 +30,9 @@ import android.provider.Settings;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -77,12 +79,13 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView pollutantsRecyclerView;
     private PollutantAdapter pollutantAdapter;
     private List<Pollutant> pollutantList;
+    private TextView AQIStatementTextView;
 
     private static final boolean MOCK_MODE = true;
 
     // --- START: Added for Air Quality Alerts ---
     private final Map<String, Long> lastAlertTimestamps = new HashMap<>();
-    private static final long ALERT_COOLDOWN = 5 * 60 * 100; // 5 minutes in milliseconds
+    private static final long ALERT_COOLDOWN = 5 * 60 * 100; // 30 seconds in milliseconds
     // --- END: Added for Air Quality Alerts ---
 
     // Receiver to get mock updates from MockDataService
@@ -103,7 +106,7 @@ public class MainActivity extends AppCompatActivity {
                     float h2 = stats.getFloat("h2", Float.NaN);
                     float aqi = stats.getFloat("aqi", Float.NaN);
 
-                    checkAirQualityLevels(co2, tvoc, co);
+                    checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
                     for (Pollutant pollutant : pollutantList) {
                         switch (pollutant.getName()) {
@@ -155,9 +158,9 @@ public class MainActivity extends AppCompatActivity {
             float alcohol = 1 + (float)(Math.random() * 5);   // ppb
             float methane = 1 + (float)(Math.random() * 5);   // ppb
             float h2 = 1 + (float)(Math.random() * 5);   // ppb
-            float aqi = calcSimpleIndex(co2, tvoc);
+            float aqi = calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
-            checkAirQualityLevels(co2, tvoc, co);
+            checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
             long timestamp = System.currentTimeMillis() / 1000;
             myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
@@ -231,7 +234,9 @@ public class MainActivity extends AppCompatActivity {
                         float h2 = intent.getFloatExtra("h2", Float.NaN);
                         float aqi = intent.getFloatExtra("aqi", Float.NaN);
 
-                        checkAirQualityLevels(co2, tvoc, co);
+                        checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
+                        calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
+
 
                         for (Pollutant pollutant : pollutantList) {
                             switch (pollutant.getName()) {
@@ -291,7 +296,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void checkAirQualityLevels(float co2, float tvoc, float co) {
+    private void checkAirQualityLevels(float co2, float tvoc, float co, float smoke, float propane, float methane, float alcohol, float h2) {
         long currentTime = System.currentTimeMillis();
 
         // --- Check TVOC Levels ---
@@ -324,14 +329,123 @@ public class MainActivity extends AppCompatActivity {
                 showAirQualityAlert("CO (Carbon Monoxide)", String.format(Locale.US, "%.2f ppm", co), "Potentially dangerous levels detected. Carbon Monoxide is hazardous. Ventilate the area immediately and consider leaving the room.");
             }
         }
+
+        // --- Check Smoke Levels ---
+        // Source: https://www.healthline.com/health-news/how-to-tell-if-the-air-is-safe-enough-to-exercise-outside
+        // > 150, The air is unhealthy for sensitive groups and people with conditions. Some people in general public may also experience health effects
+        // > 200, Risk factors are increased for everyone
+        if (smoke > 150) {
+            if (!lastAlertTimestamps.containsKey("Smoke") || (currentTime - lastAlertTimestamps.get("Smoke") > ALERT_COOLDOWN)) {
+                lastAlertTimestamps.put("Smoke", currentTime);
+                showAirQualityAlert("Smoke", String.format(Locale.US, "%.2f ppb", smoke), "Levels of smoke are high. Consider opening windows and chekcing for smole sources.");
+            }
+        }
+
+        // --- Check Propane Levels ---
+        // Source: https://www.cdc.gov/niosh/idlh/74986.html
+        if (propane > 2100) {
+            if (!lastAlertTimestamps.containsKey("Propane") || (currentTime - lastAlertTimestamps.get("Propane") > ALERT_COOLDOWN)) {
+                lastAlertTimestamps.put("Propane", currentTime);
+                showAirQualityAlert("Propane", String.format(Locale.US, "%.2f ppm", propane), "Levels of propane are high. Increase ventilation by opening windows and door and inspect common sources such as Stove burners, gas heaters, barbecue tanks. Avoid using lighters, candles or other open flames.");
+            }
+        }
+
+        // --- Check Methane Levels ---
+        // Source: https://minearc.com/wp-content/uploads/2021/04/risks-and-safety-hazards-of-methane-infographic-final.pdf
+        // Recommended a maximum of 1000ppm during an eight-hour work period
+        if (methane > 1000) {
+            if (!lastAlertTimestamps.containsKey("Methane") || (currentTime - lastAlertTimestamps.get("Methane") > ALERT_COOLDOWN)) {
+                lastAlertTimestamps.put("Methane", currentTime);
+                showAirQualityAlert("Methane", String.format(Locale.US, "%.2f ppm", methane), "Potentially dangerous levels detected. Ventilate the area and inspect nearby gas sources. Consider leaving the room");
+            }
+        }
+
+        // --- Check Alcohol Levels ---
+        // Source: https://www.osha.gov/chemicaldata/1034
+        // Exposure limit of 1000 ppm
+        if (alcohol > 1000) {
+            if (!lastAlertTimestamps.containsKey("Alcohol") || (currentTime - lastAlertTimestamps.get("Alcohol") > ALERT_COOLDOWN)) {
+                lastAlertTimestamps.put("Alcohol", currentTime);
+                showAirQualityAlert("Alcohol", String.format(Locale.US, "%.2f ppm", alcohol), "Levels of alcohol are high. Consider leaving the room and ventilating the area.");
+            }
+        }
+
+        // --- Check H2 Levels ---
+        // Source: https://nap.nationalacademies.org/read/12032/chapter/9
+        // While not toxic, H2 is very flammable
+        if (h2 > 4100) {
+            if (!lastAlertTimestamps.containsKey("H2") || (currentTime - lastAlertTimestamps.get("H2") > ALERT_COOLDOWN)) {
+                lastAlertTimestamps.put("H2", currentTime);
+                showAirQualityAlert("H2", String.format(Locale.US, "%.2f ppm", h2), "Levels of H2 are high. Ventilate area and turn off ignition sources. Move away from area if smell of leak is suspected");
+            }
+        }
+
     }
     // --- END: Added for Air Quality Alerts ---
 
-    private float calcSimpleIndex(float co2, float tvoc) {
-        // Simple placeholder for demo (0–500-ish)
-        float co2Score  = Math.min(500f, co2 / 2f);  // e.g., 1000 ppm -> 500
-        float tvocScore = Math.min(500f, tvoc * 5f); // e.g., 100 ppb -> 500
-        return Math.max(co2Score, tvocScore);
+    // --- SCALE AQI: 0–500 ---
+    // AQI Categories:
+    // 0–50 Good
+    // 51–100 Moderate
+    // 101–200 Unhealthy
+    // 201–300 Very Unhealthy
+    // 301–500 Hazardous
+
+    private float scaleToAQI(float value, float threshold) {
+        if (threshold <= 0) return 0;
+        float scaled = (value / threshold) * 100f;
+        if (scaled > 500f) scaled = 500f;   // clamp at hazardous max
+        return scaled;
+    }
+
+    public float calcSimpleIndex(float co2, float tvoc, float co, float smoke, float propane, float methane, float alcohol, float h2) {
+
+        // --- POLLUTANT THRESHOLDS ---
+        // Based on common indoor standards + typical sensor alert levels
+        float CO2_THRESHOLD       = 2000f;   // ppm
+        float TVOC_THRESHOLD      = 660f;    // ppb
+        float CO_THRESHOLD        = 9f;      // ppm
+        float PROPANE_THRESHOLD   = 2100f;     // ppm
+        float SMOKE_THRESHOLD     = 150f;    // arbitrary ppm-equivalent from sensor
+        float METHANE_THRESHOLD   = 1000f;  // ppm
+        float ALCOHOL_THRESHOLD   = 1000f;     // ppm (typical semiconductor alarm level)
+        float H2_THRESHOLD        = 4100f;   // ppm  (EPA/NIOSH recommended limit)
+
+        // --- SCALE EACH POLLUTANT ---
+        float co2AQI      = scaleToAQI(co2, CO2_THRESHOLD);
+        float tvocAQI     = scaleToAQI(tvoc, TVOC_THRESHOLD);
+        float coAQI       = scaleToAQI(co, CO_THRESHOLD);
+        float propaneAQI  = scaleToAQI(propane, PROPANE_THRESHOLD);
+        float smokeAQI    = scaleToAQI(smoke, SMOKE_THRESHOLD);
+        float methaneAQI  = scaleToAQI(methane, METHANE_THRESHOLD);
+        float alcoholAQI  = scaleToAQI(alcohol, ALCOHOL_THRESHOLD);
+        float h2AQI       = scaleToAQI(h2, H2_THRESHOLD);
+
+        // --- FINAL AQI = WORST POLLUTANT ---
+        float finalAQI = Math.max(
+                Math.max(Math.max(co2AQI, tvocAQI),Math.max(coAQI, smokeAQI)),
+                Math.max(Math.max(propaneAQI, methaneAQI), Math.max(alcoholAQI, h2AQI))
+        );
+
+        AQIStatementTextView.setVisibility(View.VISIBLE);
+
+        if (0 <= finalAQI && finalAQI <= 50){
+            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is good.");
+        }
+        else if (51 <= finalAQI && finalAQI <= 100){
+            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is moderate.");
+        }
+        else if (101 <= finalAQI && finalAQI <= 200){
+            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is unhealthy.");
+        }
+        else if (201 <= finalAQI && finalAQI <= 300){
+            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is very unhealthy.");
+        }
+        else if (301 <= finalAQI && finalAQI <= 500){
+            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is hazardous.");
+        }
+
+        return finalAQI;
     }
 
     @Override
@@ -366,6 +480,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         setupRecyclerView();
+
+        AQIStatementTextView = findViewById(R.id.AQIStatementTextView);
     }
 
     @Override
@@ -408,7 +524,7 @@ public class MainActivity extends AppCompatActivity {
                 float h2 = stats.getFloat("h2", Float.NaN);
                 float aqi = stats.getFloat("aqi", Float.NaN);
 
-                checkAirQualityLevels(co2, tvoc, co);
+                checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
                 for (Pollutant pollutant : pollutantList) {
                     switch (pollutant.getName()) {
@@ -463,7 +579,7 @@ public class MainActivity extends AppCompatActivity {
                 if (last != null && !last.isEmpty()) {
                     SensorReading r = last.get(0);
 
-                    checkAirQualityLevels(r.getCo2(), r.getTvoc(), r.getCo());
+                    checkAirQualityLevels(r.getCo2(), r.getTvoc(), r.getCo(), r.getSmoke(), r.getPropane(), r.getMethane(), r.getAlcohol(), r.getH2());
 
                     for (Pollutant pollutant : pollutantList) {
                         switch (pollutant.getName()) {
@@ -796,7 +912,9 @@ public class MainActivity extends AppCompatActivity {
                 float h2 = buffer.getFloat();
                 float aqi = buffer.getFloat();
 
-                checkAirQualityLevels(co2, tvoc, co);
+                checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
+                calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
+
 
                 long timestamp = System.currentTimeMillis() / 1000;
                 boolean isInserted = myDb.insertData(timestamp, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
