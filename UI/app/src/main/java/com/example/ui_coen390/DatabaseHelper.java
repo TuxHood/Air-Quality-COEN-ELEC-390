@@ -56,9 +56,49 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         contentValues.put(COL_8, alcohol);
         contentValues.put(COL_9, methane);
         contentValues.put(COL_10, h2);
-        contentValues.put(COL_11, aqi);
+        // If the provided aqi is NaN, compute it once here from pollutant values and store
+        float aqiToStore = aqi;
+        if (Float.isNaN(aqiToStore)) {
+            aqiToStore = calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
+        }
+        contentValues.put(COL_11, aqiToStore);
         long result = db.insert(TABLE_NAME, null, contentValues);
         return result != -1;
+    }
+
+    // --- AQI calculation helpers so DB can compute AQI once when needed ---
+    private float scaleToAQI(float value, float threshold) {
+        if (threshold <= 0) return 0;
+        float scaled = (value / threshold) * 100f;
+        if (scaled > 500f) scaled = 500f;   // clamp at hazardous max
+        return scaled;
+    }
+
+    private float calcSimpleIndex(float co2, float tvoc, float co, float smoke, float propane, float methane, float alcohol, float h2) {
+        float CO2_THRESHOLD       = 2000f;   // ppm
+        float TVOC_THRESHOLD      = 660f;    // ppb
+        float CO_THRESHOLD        = 9f;      // ppm
+        float PROPANE_THRESHOLD   = 2100f;   // ppm
+        float SMOKE_THRESHOLD     = 150f;    // arbitrary ppm-equivalent from sensor
+        float METHANE_THRESHOLD   = 1000f;   // ppm
+        float ALCOHOL_THRESHOLD   = 1000f;   // ppm
+        float H2_THRESHOLD        = 4100f;   // ppm
+
+        float co2AQI      = scaleToAQI(co2, CO2_THRESHOLD);
+        float tvocAQI     = scaleToAQI(tvoc, TVOC_THRESHOLD);
+        float coAQI       = scaleToAQI(co, CO_THRESHOLD);
+        float propaneAQI  = scaleToAQI(propane, PROPANE_THRESHOLD);
+        float smokeAQI    = scaleToAQI(smoke, SMOKE_THRESHOLD);
+        float methaneAQI  = scaleToAQI(methane, METHANE_THRESHOLD);
+        float alcoholAQI  = scaleToAQI(alcohol, ALCOHOL_THRESHOLD);
+        float h2AQI       = scaleToAQI(h2, H2_THRESHOLD);
+
+        float finalAQI = Math.max(
+                Math.max(Math.max(co2AQI, tvocAQI),Math.max(coAQI, smokeAQI)),
+                Math.max(Math.max(propaneAQI, methaneAQI), Math.max(alcoholAQI, h2AQI))
+        );
+
+        return finalAQI;
     }
 
     public List<Pair<Long, Double>> getReadingsForPollutant(String pollutantColumnName) {

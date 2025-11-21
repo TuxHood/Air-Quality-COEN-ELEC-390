@@ -18,6 +18,7 @@ public class MockDataService extends Service {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private DatabaseHelper myDb;
+    private boolean running = false;
     private final Runnable mockUpdater = new Runnable() {
         @Override
         public void run() {
@@ -31,8 +32,6 @@ public class MockDataService extends Service {
             float alcohol = 1 + (float) (Math.random() * 5);   // ppb
             float methane = 1 + (float) (Math.random() * 5);   // ppb
             float h2 = 1 + (float) (Math.random() * 5);   // ppb
-            float aqi = calcSimpleIndex(co2, tvoc);
-
             Intent intent = new Intent("mock-data-update");
             intent.putExtra("co2", co2);
             intent.putExtra("tvoc", tvoc);
@@ -42,46 +41,49 @@ public class MockDataService extends Service {
             intent.putExtra("alcohol", alcohol);
             intent.putExtra("methane", methane);
             intent.putExtra("h2", h2);
-            intent.putExtra("aqi", aqi);
 
-            // Persist generated reading to the DB so other screens (Stats) can read it
+            // Persist generated raw reading to the DB so other screens (Stats) can read it.
+            // NOTE: We no longer generate or store AQI in the mock generator. AQI will be
+            // computed by the app (MainActivity/StatsActivity) from the pollutant values so
+            // it is consistent and not randomly produced here.
             if (myDb != null) {
-                myDb.insertData(System.currentTimeMillis() / 1000, co2, tvoc, propane, co, smoke, alcohol, methane, h2, aqi);
+                myDb.insertData(System.currentTimeMillis() / 1000, co2, tvoc, propane, co, smoke, alcohol, methane, h2, Float.NaN);
             }
 
-            // Also save latest values to SharedPreferences (so UI can read immediately)
+            // Also save latest raw pollutant values to SharedPreferences so UI can read immediately
             long timestamp = System.currentTimeMillis() / 1000;
-            Log.d("MOCK_SVC", String.format(Locale.US, "mock update ts=%d co2=%.2f tvoc=%.2f aqi=%.2f", timestamp, co2, tvoc, aqi));
-        getSharedPreferences("stats", MODE_PRIVATE).edit()
-            .putLong("timestamp", timestamp)
-            .putFloat("co2", co2)
-            .putFloat("tvoc", tvoc)
-            .putFloat("aqi", aqi)
-            .putFloat("propane", propane)
-            .putFloat("co", co)
-            .putFloat("smoke", smoke)
-            .putFloat("alcohol", alcohol)
-            .putFloat("methane", methane)
-            .putFloat("h2", h2)
-            .apply();
+            Log.d("MOCK_SVC", String.format(Locale.US, "mock update ts=%d co2=%.2f tvoc=%.2f", timestamp, co2, tvoc));
+            getSharedPreferences("stats", MODE_PRIVATE).edit()
+                .putLong("timestamp", timestamp)
+                .putFloat("co2", co2)
+                .putFloat("tvoc", tvoc)
+                //.putFloat("aqi", removed)
+                .putFloat("propane", propane)
+                .putFloat("co", co)
+                .putFloat("smoke", smoke)
+                .putFloat("alcohol", alcohol)
+                .putFloat("methane", methane)
+                .putFloat("h2", h2)
+                .apply();
 
             LocalBroadcastManager.getInstance(MockDataService.this).sendBroadcast(intent);
 
-            handler.postDelayed(this, 2000); // update every 2 seconds
+            handler.postDelayed(this, 5000); // update every 5 seconds
         }
     };
 
-    private float calcSimpleIndex(float co2, float tvoc) {
-        // Simple placeholder for demo (0–500-ish)
-        float co2Score = Math.min(500f, co2 / 2f);  // e.g., 1000 ppm -> 500
-        float tvocScore = Math.min(500f, tvoc * 5f); // e.g., 100 ppb -> 500
-        return Math.max(co2Score, tvocScore);
-    }
+    // NOTE: AQI calculation moved to MainActivity/StatsActivity. MockDataService no longer
+    // computes aqi so the app can compute AQI consistently from all pollutant columns.
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (myDb == null) myDb = new DatabaseHelper(this);
-        handler.post(mockUpdater);
+        // Only start the updater loop once. startService may be called multiple times
+        // (e.g., from activities), so guard against duplicate postings.
+        if (!running) {
+            running = true;
+            handler.post(mockUpdater);
+        }
         return START_STICKY;
     }
 
@@ -95,6 +97,7 @@ public class MockDataService extends Service {
         super.onDestroy();
         // Stop periodic updates
         handler.removeCallbacks(mockUpdater);
+        running = false;
         // Cleanup DB helper reference
         if (myDb != null) {
             myDb = null;

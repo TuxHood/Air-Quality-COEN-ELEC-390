@@ -3,7 +3,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="16dp">
+    android:padding="12dp"
+    android:gravity="center_vertical">
 
     <TextView
         android:id="@+id/pollutantNameTextView"
@@ -12,10 +13,45 @@
         android:layout_weight="1"
         android:textSize="18sp" />
 
+    <!-- Numeric value (shown in Advanced mode) -->
     <TextView
         android:id="@+id/pollutantValueTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="18sp" />
+        android:textSize="16sp"
+        android:paddingEnd="8dp" />
+
+    <!-- Gauge container (shown in Normal mode) -->
+    <LinearLayout
+        android:id="@+id/gaugeContainer"
+        android:layout_width="160dp"
+        android:layout_height="28dp"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginStart="8dp">
+
+        <FrameLayout
+            android:id="@+id/gaugeBackground"
+            android:layout_width="match_parent"
+            android:layout_height="16dp"
+            android:background="#FFDADADA"
+            android:padding="0dp">
+
+            <View
+                android:id="@+id/gaugeFill"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:background="#FF4CAF50" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/gaugeLegend"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="0–100 (Good→Hazardous)"
+            android:textSize="10sp"
+            android:paddingTop="2dp"
+            android:gravity="center" />
+    </LinearLayout>
 
 </LinearLayout>

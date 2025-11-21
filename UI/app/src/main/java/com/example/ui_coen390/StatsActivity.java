@@ -56,6 +56,41 @@ public class StatsActivity extends AppCompatActivity {
         });
     }
 
+    // --- AQI calculation helpers (same approach as MainActivity) ---
+    private float scaleToAQI(float value, float threshold) {
+        if (threshold <= 0) return 0;
+        float scaled = (value / threshold) * 100f;
+        if (scaled > 500f) scaled = 500f;
+        return scaled;
+    }
+
+    private float calcSimpleIndex(float co2, float tvoc, float co, float smoke, float propane, float methane, float alcohol, float h2) {
+        float CO2_THRESHOLD       = 2000f;
+        float TVOC_THRESHOLD      = 660f;
+        float CO_THRESHOLD        = 9f;
+        float PROPANE_THRESHOLD   = 2100f;
+        float SMOKE_THRESHOLD     = 150f;
+        float METHANE_THRESHOLD   = 1000f;
+        float ALCOHOL_THRESHOLD   = 1000f;
+        float H2_THRESHOLD        = 4100f;
+
+        float co2AQI      = scaleToAQI(co2, CO2_THRESHOLD);
+        float tvocAQI     = scaleToAQI(tvoc, TVOC_THRESHOLD);
+        float coAQI       = scaleToAQI(co, CO_THRESHOLD);
+        float propaneAQI  = scaleToAQI(propane, PROPANE_THRESHOLD);
+        float smokeAQI    = scaleToAQI(smoke, SMOKE_THRESHOLD);
+        float methaneAQI  = scaleToAQI(methane, METHANE_THRESHOLD);
+        float alcoholAQI  = scaleToAQI(alcohol, ALCOHOL_THRESHOLD);
+        float h2AQI       = scaleToAQI(h2, H2_THRESHOLD);
+
+        float finalAQI = Math.max(
+                Math.max(Math.max(co2AQI, tvocAQI),Math.max(coAQI, smokeAQI)),
+                Math.max(Math.max(propaneAQI, methaneAQI), Math.max(alcoholAQI, h2AQI))
+        );
+
+        return finalAQI;
+    }
+
 
     @Override
     protected void onResume() {
@@ -64,10 +99,29 @@ public class StatsActivity extends AppCompatActivity {
             @Override
             public void run() {
                 updateGraphs();
-                mHandler.postDelayed(this, 1000);
+                // update less frequently to match mock generator and reduce CPU usage
+                mHandler.postDelayed(this, 5000);
             }
         };
-        mHandler.postDelayed(mTimer, 1000);
+
+        // Update immediately so UI isn't empty, then schedule next run aligned with mock timestamp
+        updateGraphs();
+        try {
+            long intervalMs = 5000L;
+            android.content.SharedPreferences stats = getSharedPreferences("stats", MODE_PRIVATE);
+            long tsSec = stats.getLong("timestamp", 0L);
+            if (tsSec <= 0L) {
+                mHandler.postDelayed(mTimer, intervalMs);
+            } else {
+                long nowMs = System.currentTimeMillis();
+                long lastMs = tsSec * 1000L;
+                long elapsed = nowMs - lastMs;
+                long delay = elapsed >= intervalMs ? 0L : (intervalMs - elapsed);
+                mHandler.postDelayed(mTimer, delay);
+            }
+        } catch (Exception e) {
+            mHandler.postDelayed(mTimer, 5000);
+        }
     }
 
     @Override
@@ -136,7 +190,13 @@ public class StatsActivity extends AppCompatActivity {
 
 
             for (SensorReading r : readings) {
-                seriesAqi.appendData(new DataPoint(new Date(r.getTimestamp() * 1000), r.getAqi()), true, readings.size());
+                // Prefer AQI stored in the database (computed once at insert time).
+                // Only compute as a fallback if stored AQI is NaN (older rows before DB-side calc).
+                float aqiToPlot = r.getAqi();
+                if (Float.isNaN(aqiToPlot)) {
+                    aqiToPlot = calcSimpleIndex(r.getCo2(), r.getTvoc(), r.getCo(), r.getSmoke(), r.getPropane(), r.getMethane(), r.getAlcohol(), r.getH2());
+                }
+                seriesAqi.appendData(new DataPoint(new Date(r.getTimestamp() * 1000), aqiToPlot), true, readings.size());
                 seriesCo2.appendData(new DataPoint(new Date(r.getTimestamp() * 1000), r.getCo2()), true, readings.size());
                 seriesTvoc.appendData(new DataPoint(new Date(r.getTimestamp() * 1000), r.getTvoc()), true, readings.size());
                 seriesPropane.appendData(new DataPoint(new Date(r.getTimestamp() * 1000), r.getPropane()), true, readings.size());
@@ -223,7 +283,11 @@ public class StatsActivity extends AppCompatActivity {
 
 
             SensorReading latest = readings.get(readings.size() - 1);
-            ((android.widget.TextView) findViewById(R.id.textAqi)).setText(String.format("%.0f", latest.getAqi()));
+            float latestAqi = latest.getAqi();
+            if (Float.isNaN(latestAqi)) {
+                latestAqi = calcSimpleIndex(latest.getCo2(), latest.getTvoc(), latest.getCo(), latest.getSmoke(), latest.getPropane(), latest.getMethane(), latest.getAlcohol(), latest.getH2());
+            }
+            ((android.widget.TextView) findViewById(R.id.textAqi)).setText(String.format("%.0f", latestAqi));
             ((android.widget.TextView) findViewById(R.id.textCo2)).setText(String.format("%.0f ppm", latest.getCo2()));
             ((android.widget.TextView) findViewById(R.id.textTvoc)).setText(String.format("%.0f ppb", latest.getTvoc()));
             ((android.widget.TextView) findViewById(R.id.textPropane)).setText(String.format("%.0f ppb", latest.getPropane()));
@@ -239,6 +303,13 @@ public class StatsActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu_main, menu);
+        // Hide Statistics menu item and the mode toggle when in StatsActivity
+        try {
+            MenuItem statsItem = menu.findItem(R.id.action_statistics);
+            if (statsItem != null) statsItem.setVisible(false);
+            MenuItem toggle = menu.findItem(R.id.action_toggle_mode);
+            if (toggle != null) toggle.setVisible(false);
+        } catch (Exception ignored) {}
         return true;
     }
 

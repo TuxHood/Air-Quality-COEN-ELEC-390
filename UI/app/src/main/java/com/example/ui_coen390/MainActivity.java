@@ -142,8 +142,8 @@ public class MainActivity extends AppCompatActivity {
                     pollutantAdapter.notifyDataSetChanged();
                 }
             } catch (Exception ignored) {}
-            // schedule next poll
-            handler.postDelayed(this, 1000);
+            // schedule next poll (reduced frequency to match mock service updates)
+            handler.postDelayed(this, 5000);
         }
     };
 
@@ -200,7 +200,7 @@ public class MainActivity extends AppCompatActivity {
                 pollutantAdapter.notifyDataSetChanged();
             });
 
-            handler.postDelayed(this, 2000); // update every 2 seconds
+            handler.postDelayed(this, 5000); // update every 5 seconds
         }
     };
 
@@ -212,12 +212,17 @@ public class MainActivity extends AppCompatActivity {
             pollutantAdapter.notifyDataSetChanged();
             connectButton.setEnabled(false);
         });
-
-        // Start background service that generates mock data and writes to DB
+        // Start background mock service and ensure we are registered to receive its broadcasts
         Intent svc = new Intent(this, MockDataService.class);
         startService(svc);
 
-        // Register a local broadcast receiver to receive UI updates from the service
+        // Register receiver and start polling for stats aligned to the mock timestamp
+        registerMockReceiverIfNeeded();
+        handler.removeCallbacks(statsPoller);
+        scheduleStatsPollerAligned();
+    }
+
+    private void registerMockReceiverIfNeeded() {
         if (mockReceiver == null) {
             mockReceiver = new BroadcastReceiver() {
                 @Override
@@ -235,10 +240,6 @@ public class MainActivity extends AppCompatActivity {
 
                         checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
                         float aqi = calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
-
-
-                        //calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
-
 
                         for (Pollutant pollutant : pollutantList) {
                             switch (pollutant.getName()) {
@@ -279,10 +280,27 @@ public class MainActivity extends AppCompatActivity {
             };
             LocalBroadcastManager.getInstance(this).registerReceiver(mockReceiver, new IntentFilter("mock-data-update"));
         }
+    }
 
-        // Start polling SharedPreferences for latest stats as a fallback to updates
-        handler.removeCallbacks(statsPoller);
-        handler.post(statsPoller);
+    private void scheduleStatsPollerAligned() {
+        final long intervalMs = 5000L;
+        try {
+            android.content.SharedPreferences stats = getSharedPreferences("stats", MODE_PRIVATE);
+            long tsSec = stats.getLong("timestamp", 0L);
+            long nowMs = System.currentTimeMillis();
+            if (tsSec <= 0L) {
+                // no timestamp available, schedule immediately
+                handler.post(statsPoller);
+                return;
+            }
+            long lastMs = tsSec * 1000L;
+            long elapsed = nowMs - lastMs;
+            long delay = elapsed >= intervalMs ? 0L : (intervalMs - elapsed);
+            handler.postDelayed(statsPoller, delay);
+        } catch (Exception e) {
+            // fallback: post immediately
+            handler.post(statsPoller);
+        }
     }
 
     // --- START: Added for Air Quality Alerts ---
@@ -453,6 +471,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Ensure a default display mode is set so the gauge is visible by default on first run.
+        try {
+            android.content.SharedPreferences dp = getSharedPreferences("display_prefs", MODE_PRIVATE);
+            if (!dp.contains("displayMode")) {
+                dp.edit().putString("displayMode", "normal").apply();
+            }
+        } catch (Exception ignored) {}
+
         setContentView(R.layout.activity_main);
 
         MaterialToolbar toolbar = findViewById(R.id.topAppBar);
@@ -621,7 +647,16 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        // Note: mockReceiver registration happens only when startMockMode() is invoked
+        // If we're in mock/demo mode, ensure the mock service is running and receiver is registered
+        if (MOCK_MODE) {
+            // Start the mock service if it isn't running; safe to call repeatedly
+            startService(new Intent(this, MockDataService.class));
+            registerMockReceiverIfNeeded();
+            handler.removeCallbacks(statsPoller);
+            handler.post(statsPoller);
+        }
+
+        // Note: mockReceiver registration happens only when startMockMode() is invoked (or restored here)
     }
 
     private void setupRecyclerView() {
@@ -915,7 +950,6 @@ public class MainActivity extends AppCompatActivity {
                 float aqi = calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
                 checkAirQualityLevels(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
-                calcSimpleIndex(co2, tvoc, co, smoke, propane, methane, alcohol, h2);
 
 
                 long timestamp = System.currentTimeMillis() / 1000;
@@ -1018,6 +1052,19 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu_main, menu);
+        // Ensure the toggle menu shows the current mode label
+        try {
+            android.content.SharedPreferences prefs = getSharedPreferences("display_prefs", MODE_PRIVATE);
+            String mode = prefs.getString("displayMode", "advanced");
+            MenuItem toggle = menu.findItem(R.id.action_toggle_mode);
+            if (toggle != null) {
+                // Inverted naming: show the opposite label compared to before
+                toggle.setTitle(mode.equals("normal") ? R.string.action_mode_normal : R.string.action_mode_advanced);
+            }
+            // Hide Home when already on MainActivity
+            MenuItem homeItem = menu.findItem(R.id.action_home);
+            if (homeItem != null) homeItem.setVisible(false);
+        } catch (Exception ignored) {}
         return true;
     }
 
@@ -1032,6 +1079,26 @@ public class MainActivity extends AppCompatActivity {
             return true;
         } else if (id == R.id.action_settings) {
             startActivity(new Intent(this, SettingsActivity.class));
+            return true;
+        } else if (id == R.id.action_toggle_mode) {
+            // Toggle between advanced and normal display modes (MainActivity only)
+            android.content.SharedPreferences prefs = getSharedPreferences("display_prefs", MODE_PRIVATE);
+            String current = prefs.getString("displayMode", "advanced");
+            String next = "advanced".equals(current) ? "normal" : "advanced";
+            prefs.edit().putString("displayMode", next).apply();
+
+            // Update menu title immediately: show the label for the mode the user will switch TO
+            int titleRes = next.equals("normal") ? R.string.action_mode_normal : R.string.action_mode_advanced;
+            item.setTitle(titleRes);
+            try {
+                MenuItem toggleItem = ((androidx.appcompat.widget.Toolbar) findViewById(R.id.topAppBar)).getMenu().findItem(R.id.action_toggle_mode);
+                if (toggleItem != null) toggleItem.setTitle(titleRes);
+            } catch (Exception ignored) {}
+
+            // Refresh list display
+            if (pollutantAdapter != null) {
+                pollutantAdapter.notifyDataSetChanged();
+            }
             return true;
         }
         return super.onOptionsItemSelected(item);

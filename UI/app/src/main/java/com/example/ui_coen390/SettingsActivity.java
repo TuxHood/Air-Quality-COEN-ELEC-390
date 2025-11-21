@@ -3,6 +3,7 @@ package com.example.ui_coen390;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -89,10 +90,32 @@ public class SettingsActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId() == android.R.id.home) {
+        int id = item.getItemId();
+        if (id == android.R.id.home) {
             onBackPressed();
+            return true;
+        } else if (id == R.id.action_home) {
+            startActivity(new Intent(this, MainActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+            return true;
+        } else if (id == R.id.action_statistics) {
+            startActivity(new Intent(this, StatsActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        // Hide Settings and mode toggle when in SettingsActivity
+        try {
+            MenuItem settingsItem = menu.findItem(R.id.action_settings);
+            if (settingsItem != null) settingsItem.setVisible(false);
+            MenuItem toggle = menu.findItem(R.id.action_toggle_mode);
+            if (toggle != null) toggle.setVisible(false);
+        } catch (Exception ignored) {}
+        return true;
     }
 }

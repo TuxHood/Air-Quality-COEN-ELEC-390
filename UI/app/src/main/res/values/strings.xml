@@ -17,4 +17,6 @@
     <string name="status_connecting">Connecting</string>
     <string name="status_error">Error</string>
     <string name="export_data">Export Data</string>
+    <string name="action_mode_advanced">Advanced</string>
+    <string name="action_mode_normal">Normal</string>
 </resources>
