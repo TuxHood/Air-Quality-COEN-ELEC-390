@@ -12,6 +12,27 @@ static BLEUUID serviceUUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
 static BLEUUID txCharUUID("6E400003-B5A3-F393-E0A9-E50E24DCCA9E"); // notify (device -> client)
 
 NimBLECharacteristic* pTxCharacteristic = nullptr;
+NimBLEServer* pServer = nullptr;
+static volatile bool clientConnected = false;
+NimBLEAdvertising* pAdv = nullptr;
+
+// Advertising watchdog settings
+const unsigned long ADV_WATCH_INTERVAL = 5000; // ms
+const int ADV_RESTART_MAX = 6;
+static int advRestartAttempts = 0;
+
+class ServerCallbacks: public NimBLEServerCallbacks {
+  void onConnect(NimBLEServer* s) {
+    clientConnected = true;
+    Serial.println("BLE client connected");
+  }
+  void onDisconnect(NimBLEServer* s) {
+    clientConnected = false;
+    Serial.println("BLE client disconnected");
+    // Keep advertising so clients can reconnect
+    if (pAdv) pAdv->start();
+  }
+};
 
 // Sensors
 const int MQ2_PIN = 34; // Analog input for MQ-2, change if needed
@@ -41,7 +62,8 @@ void setup() {
 Serial.println("-----------------------------------------------");
   // BLE init
   NimBLEDevice::init(DEVICE_NAME);
-  NimBLEServer* pServer = NimBLEDevice::createServer();
+  pServer = NimBLEDevice::createServer();
+  pServer->setCallbacks(new ServerCallbacks());
   NimBLEService* pService = pServer->createService(serviceUUID);
   pTxCharacteristic = pService->createCharacteristic(txCharUUID, NIMBLE_PROPERTY::NOTIFY);
   // Ensure the standard CCCD (0x2902) exists so Android clients can enable
@@ -51,7 +73,7 @@ Serial.println("-----------------------------------------------");
 
   pService->start();
 
-  NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
+  pAdv = NimBLEDevice::getAdvertising();
   pAdv->addServiceUUID(serviceUUID);
   NimBLEDevice::setDeviceName(DEVICE_NAME);
   pAdv->setName(DEVICE_NAME);
@@ -138,6 +160,31 @@ void loop() {
         Serial.print(" METH="); Serial.print(values[6]);
         Serial.print(" H2="); Serial.println(values[7]);
       }
+  }
+
+  // Advertising watchdog: periodically ensure advertising is running when
+  // no client is connected. If restarting advertising repeatedly fails,
+  // reboot the device to recover the BLE stack.
+  static unsigned long lastAdvWatch = 0;
+  unsigned long nowWatch = millis();
+  if (nowWatch - lastAdvWatch >= ADV_WATCH_INTERVAL) {
+    lastAdvWatch = nowWatch;
+    if (!clientConnected && pAdv) {
+      bool isAdv = pAdv->isAdvertising();
+      if (!isAdv) {
+        Serial.println("Watchdog: advertising stopped, attempting restart...");
+        pAdv->start();
+        advRestartAttempts++;
+        if (advRestartAttempts > ADV_RESTART_MAX) {
+          Serial.println("Watchdog: too many advertising restarts, rebooting...");
+          delay(200);
+          ESP.restart();
+        }
+      } else {
+        // Advertising is healthy; reset restart counter
+        advRestartAttempts = 0;
+      }
+    }
   }
 
   delay(20);

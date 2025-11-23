@@ -13,6 +13,7 @@
     <string name="action_home">Home</string>
     <string name="status_disconnected">Disconnected</string>
     <string name="status_connected">Connected</string>
+    <string name="status_disconnect">Disconnect</string>
     <string name="status_connect">Connect</string>
     <string name="status_connecting">Connecting</string>
     <string name="status_error">Error</string>

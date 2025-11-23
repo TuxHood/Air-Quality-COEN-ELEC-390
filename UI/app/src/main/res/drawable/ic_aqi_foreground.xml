@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Draw the bitmap larger than the default so the inner artwork appears bigger on launchers.
+         We set explicit width/height; the bitmap will be centered and the adaptive mask will crop as needed. -->
+    <item>
+        <bitmap
+            android:src="@drawable/aqi_logo"
+            android:gravity="center"
+            android:antialias="true"
+            android:width="420dp"
+            android:height="420dp" />
+    </item>
+</layer-list>

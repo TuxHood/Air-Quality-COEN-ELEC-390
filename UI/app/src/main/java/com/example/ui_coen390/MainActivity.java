@@ -16,11 +16,14 @@ import android.content.BroadcastReceiver;
 import android.content.IntentFilter;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.os.ParcelUuid;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -63,12 +66,24 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothLeScanner bluetoothLeScanner;
     private BluetoothGatt bluetoothGatt;
+    // Tracks whether we're currently connected to the BLE device
+    private boolean isConnected = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean scanning;
     private static final long SCAN_PERIOD = 10000;
 
+    // Runnable used to stop scans after a timeout. Keep reference so we can remove it safely.
+    private Runnable scanTimeoutRunnable;
+    // Guard to avoid immediate reconnect attempts after a user disconnect or a GATT close
+    private boolean canScan = true;
+    // Retry counters for transient GATT errors (status 133)
+    private int gattRetryCount = 0;
+    private static final int MAX_GATT_RETRIES = 1;
+
     //IMPORTANT REPLACE MAC ADDRESS WITH YOUR DEVICE
-    private static final String DEVICE_ADDRESS = "e8:6b:ea:c9:ed:e2";
+    //Official Address: e8:6b:ea:c9:ed:e2
+    //Test Address: CC:BA:97:14:1E:E9 
+    private static final String DEVICE_ADDRESS = "CC:BA:97:14:1E:E9";
 
     // UUIDs for service/characteristic (update if needed)
     private static final UUID SERVICE_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
@@ -81,7 +96,7 @@ public class MainActivity extends AppCompatActivity {
     private List<Pollutant> pollutantList;
     private TextView AQIStatementTextView;
 
-    private static final boolean MOCK_MODE = true;
+    private static final boolean MOCK_MODE = false;
 
     // --- START: Added for Air Quality Alerts ---
     private final Map<String, Long> lastAlertTimestamps = new HashMap<>();
@@ -139,7 +154,9 @@ public class MainActivity extends AppCompatActivity {
                                 break;
                         }
                     }
-                    pollutantAdapter.notifyDataSetChanged();
+                    // Update AQI statement on UI and refresh the list
+                    updateAQIStatement(aqi);
+                    refreshPollutantsOnUi();
                 }
             } catch (Exception ignored) {}
             // schedule next poll (reduced frequency to match mock service updates)
@@ -197,7 +214,7 @@ public class MainActivity extends AppCompatActivity {
                             break;
                     }
                 }
-                pollutantAdapter.notifyDataSetChanged();
+                refreshPollutantsOnUi();
             });
 
             handler.postDelayed(this, 5000); // update every 5 seconds
@@ -209,7 +226,7 @@ public class MainActivity extends AppCompatActivity {
             for (Pollutant pollutant : pollutantList) {
                 pollutant.setValue("Connecting...");
             }
-            pollutantAdapter.notifyDataSetChanged();
+            refreshPollutantsOnUi();
             connectButton.setEnabled(false);
         });
         // Start background mock service and ensure we are registered to receive its broadcasts
@@ -220,6 +237,27 @@ public class MainActivity extends AppCompatActivity {
         registerMockReceiverIfNeeded();
         handler.removeCallbacks(statsPoller);
         scheduleStatsPollerAligned();
+    }
+
+    // Helper: safely refresh the pollutants RecyclerView on the UI thread
+    private void refreshPollutantsOnUi() {
+        try {
+            if (pollutantsRecyclerView != null) {
+                pollutantsRecyclerView.post(() -> {
+                    try {
+                        if (pollutantAdapter != null) pollutantAdapter.notifyDataSetChanged();
+                        pollutantsRecyclerView.invalidate();
+                        pollutantsRecyclerView.requestLayout();
+                    } catch (Exception ignored) {}
+                });
+            } else {
+                runOnUiThread(() -> {
+                    try {
+                        if (pollutantAdapter != null) pollutantAdapter.notifyDataSetChanged();
+                    } catch (Exception ignored) {}
+                });
+            }
+        } catch (Exception ignored) {}
     }
 
     private void registerMockReceiverIfNeeded() {
@@ -272,8 +310,12 @@ public class MainActivity extends AppCompatActivity {
                                     break;
                             }
                         }
-                        pollutantAdapter.notifyDataSetChanged();
-                        connectButton.setText(R.string.status_connected);
+                        refreshPollutantsOnUi();
+                        // Update the AQI statement (must run on UI thread)
+                        updateAQIStatement(aqi);
+                        // Mock mode behaves like a connected device for the UI
+                        isConnected = true;
+                        connectButton.setText(R.string.status_disconnect);
                         connectButton.setEnabled(true);
                     });
                 }
@@ -285,21 +327,11 @@ public class MainActivity extends AppCompatActivity {
     private void scheduleStatsPollerAligned() {
         final long intervalMs = 5000L;
         try {
-            android.content.SharedPreferences stats = getSharedPreferences("stats", MODE_PRIVATE);
-            long tsSec = stats.getLong("timestamp", 0L);
-            long nowMs = System.currentTimeMillis();
-            if (tsSec <= 0L) {
-                // no timestamp available, schedule immediately
-                handler.post(statsPoller);
-                return;
-            }
-            long lastMs = tsSec * 1000L;
-            long elapsed = nowMs - lastMs;
-            long delay = elapsed >= intervalMs ? 0L : (intervalMs - elapsed);
+            long delay = PollingUtils.computeNextDelay(intervalMs);
             handler.postDelayed(statsPoller, delay);
         } catch (Exception e) {
-            // fallback: post immediately
-            handler.post(statsPoller);
+            // fallback: schedule at interval
+            handler.postDelayed(statsPoller, intervalMs);
         }
     }
 
@@ -447,25 +479,33 @@ public class MainActivity extends AppCompatActivity {
                 Math.max(Math.max(propaneAQI, methaneAQI), Math.max(alcoholAQI, h2AQI))
         );
 
-        AQIStatementTextView.setVisibility(View.VISIBLE);
-
-        if (0 <= finalAQI && finalAQI <= 50){
-            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is good.");
-        }
-        else if (51 <= finalAQI && finalAQI <= 100){
-            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is moderate.");
-        }
-        else if (101 <= finalAQI && finalAQI <= 200){
-            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is unhealthy.");
-        }
-        else if (201 <= finalAQI && finalAQI <= 300){
-            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is very unhealthy.");
-        }
-        else if (301 <= finalAQI && finalAQI <= 500){
-            AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is hazardous.");
-        }
+        // NOTE: Do not touch UI elements from this utility function. Return the AQI value
+        // and let the caller update UI on the main thread via `updateAQIStatement`.
 
         return finalAQI;
+    }
+
+    // Update the AQI statement view on the UI thread. Call this from any thread.
+    private void updateAQIStatement(final float finalAQI) {
+        try {
+            runOnUiThread(() -> {
+                try {
+                    if (AQIStatementTextView == null) return;
+                    AQIStatementTextView.setVisibility(View.VISIBLE);
+                    if (0 <= finalAQI && finalAQI <= 50) {
+                        AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is good.");
+                    } else if (51 <= finalAQI && finalAQI <= 100) {
+                        AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is moderate.");
+                    } else if (101 <= finalAQI && finalAQI <= 200) {
+                        AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is unhealthy.");
+                    } else if (201 <= finalAQI && finalAQI <= 300) {
+                        AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is very unhealthy.");
+                    } else if (301 <= finalAQI && finalAQI <= 500) {
+                        AQIStatementTextView.setText("The AQI is " + Math.round(finalAQI) + ". The air quality is hazardous.");
+                    }
+                } catch (Exception ignored) {}
+            });
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -503,7 +543,12 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "Demo mode: starting fake updates.");
                 startMockMode();
             } else {
-                handleConnectionRequest();  // real BLE path
+                if (isConnected) {
+                    Log.d(TAG, "User requested disconnect.");
+                    disconnectGatt();
+                } else {
+                    handleConnectionRequest();  // real BLE path
+                }
             }
         });
 
@@ -535,7 +580,7 @@ public class MainActivity extends AppCompatActivity {
         }
         pollutantList.clear();
         pollutantList.addAll(updated);
-        pollutantAdapter.notifyDataSetChanged();
+        refreshPollutantsOnUi();
 
         // Try to populate UI immediately from last saved stats so we don't show "Connecting..." forever
         try {
@@ -585,7 +630,7 @@ public class MainActivity extends AppCompatActivity {
                             break;
                     }
                 }
-                pollutantAdapter.notifyDataSetChanged();
+                refreshPollutantsOnUi();
             }
         } catch (Exception e) {
             // ignore and fall back to broadcast updates
@@ -640,7 +685,7 @@ public class MainActivity extends AppCompatActivity {
                                 break;
                         }
                     }
-                    pollutantAdapter.notifyDataSetChanged();
+                    refreshPollutantsOnUi();
                 }
             } catch (Exception ex) {
                 // ignore fallback failure
@@ -652,9 +697,10 @@ public class MainActivity extends AppCompatActivity {
             // Start the mock service if it isn't running; safe to call repeatedly
             startService(new Intent(this, MockDataService.class));
             registerMockReceiverIfNeeded();
-            handler.removeCallbacks(statsPoller);
-            handler.post(statsPoller);
         }
+        // Always schedule the stats poller so the app UI stays in sync with latest saved stats
+        handler.removeCallbacks(statsPoller);
+        handler.post(statsPoller);
 
         // Note: mockReceiver registration happens only when startMockMode() is invoked (or restored here)
     }
@@ -764,12 +810,18 @@ public class MainActivity extends AppCompatActivity {
     @SuppressLint("MissingPermission")
     private void startScan() {
         if (MOCK_MODE) return;  // mock guard
-
         if (!bluetoothAdapter.isEnabled()) {
             Toast.makeText(this, "Bluetooth is not enabled.", Toast.LENGTH_SHORT).show();
             return;
         }
 
+        if (!canScan) {
+            Log.w(TAG, "Scan blocked temporarily to allow BLE stack to settle.");
+            Toast.makeText(this, "Please wait a moment before reconnecting.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Always refresh the scanner reference to avoid stale instances after disconnect/close
         bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
         if (bluetoothLeScanner == null) {
             Log.e(TAG, "Failed to get BLE scanner, is Bluetooth enabled?");
@@ -777,22 +829,63 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        try {
+            // If a previous scan is in progress, stop it first so we can start a fresh scan
+            if (scanning && bluetoothLeScanner != null) {
+                bluetoothLeScanner.stopScan(leScanCallback);
+                scanning = false;
+                Log.d(TAG, "Stopped previous scan to restart a fresh scan.");
+            }
 
-        if (!scanning) {
-            Log.d(TAG, "Starting BLE scan...");
-            handler.postDelayed(() -> {
-                if (scanning) {
-                    scanning = false;
-                    bluetoothLeScanner.stopScan(leScanCallback);
-                    Log.d(TAG, "Scan stopped after timeout.");
+            Log.d(TAG, "Starting BLE scan (filtered for target device)...");
+            // Use a focused scan filter for the known device address to make discovery quicker
+            List<ScanFilter> filters = new ArrayList<>();
+            try {
+                // Prefer filtering by service UUID — more robust if device uses random/private addresses
+                filters.add(new ScanFilter.Builder().setServiceUuid(new ParcelUuid(SERVICE_UUID)).build());
+            } catch (Exception e) {
+                Log.w(TAG, "Could not set scan filter by service UUID: " + e.getMessage());
+                try {
+                    // Fallback: filter by device address if service filter unavailable
+                    filters.add(new ScanFilter.Builder().setDeviceAddress(DEVICE_ADDRESS).build());
+                } catch (Exception ex) {
+                    Log.w(TAG, "Could not set scan filter by device address: " + ex.getMessage());
+                    filters.clear();
                 }
-            }, SCAN_PERIOD);
+            }
+
+            ScanSettings settings;
+            try {
+                settings = new ScanSettings.Builder()
+                        .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                        .build();
+            } catch (NoSuchMethodError | Exception e) {
+                // Older platforms: fall back to default
+                settings = null;
+            }
+
+            // Schedule timeout to stop scan after SCAN_PERIOD. Keep a reference so we can cancel it.
+            scanTimeoutRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    if (scanning && bluetoothLeScanner != null) {
+                        scanning = false;
+                        try { bluetoothLeScanner.stopScan(leScanCallback); } catch (Exception ignored) {}
+                        Log.d(TAG, "Scan stopped after timeout.");
+                    }
+                }
+            };
+            handler.postDelayed(scanTimeoutRunnable, SCAN_PERIOD);
+
             scanning = true;
-            bluetoothLeScanner.startScan(leScanCallback);
-        } else {
-            scanning = false;
-            bluetoothLeScanner.stopScan(leScanCallback);
-            Log.d(TAG, "Scan stopped manually.");
+            if (filters.isEmpty() || settings == null) {
+                bluetoothLeScanner.startScan(leScanCallback);
+            } else {
+                bluetoothLeScanner.startScan(filters, settings, leScanCallback);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error while starting BLE scan: " + e.getMessage());
+            Toast.makeText(this, "Failed to start BLE scan.", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -804,6 +897,7 @@ public class MainActivity extends AppCompatActivity {
             bluetoothLeScanner.stopScan(leScanCallback);
             scanning = false;
             Log.d(TAG, "Scan stopped.");
+            if (scanTimeoutRunnable != null) handler.removeCallbacks(scanTimeoutRunnable);
         }
     }
 
@@ -821,8 +915,8 @@ public class MainActivity extends AppCompatActivity {
                     bluetoothLeScanner.stopScan(leScanCallback);
                 }
 
-                // Also cancel the 10-second timeout handler to prevent it from firing later
-                handler.removeCallbacksAndMessages(null);
+                // Cancel only the scan timeout runnable to avoid removing unrelated callbacks
+                if (scanTimeoutRunnable != null) handler.removeCallbacks(scanTimeoutRunnable);
                 connectDevice(device);
             }
         }
@@ -836,6 +930,54 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @SuppressLint("MissingPermission")
+    private void disconnectGatt() {
+        Log.d(TAG, "Disconnecting from device (user requested)");
+        try {
+            if (bluetoothGatt != null) {
+                // ask the stack to disconnect; avoid immediate close so peripheral receives proper disconnect
+                bluetoothGatt.disconnect();
+                // schedule a delayed close in case onConnectionStateChange doesn't arrive promptly
+                final BluetoothGatt g = bluetoothGatt;
+                handler.postDelayed(() -> {
+                    try {
+                        if (g != null) g.close();
+                    } catch (Exception ignored) {}
+                }, 800);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Error while disconnecting/closing GATT: " + e.getMessage());
+        } finally {
+            bluetoothGatt = null;
+            isConnected = false;
+            // reset any pending retry attempts because user explicitly disconnected
+            gattRetryCount = 0;
+            // Prevent immediate re-scanning/connect attempts; give BLE stack a moment to settle
+            canScan = false;
+            // Also stop any active scan and clear scanner reference so future scans start clean
+            try { stopScan(); } catch (Exception ignored) {}
+            bluetoothLeScanner = null;
+            try { if (bluetoothAdapter != null) bluetoothAdapter.cancelDiscovery(); } catch (Exception ignored) {}
+            // Update UI immediately but keep the connect button disabled for a short cooldown
+            runOnUiThread(() -> {
+                for (Pollutant pollutant : pollutantList) {
+                    pollutant.setValue("Disconnected");
+                }
+                refreshPollutantsOnUi();
+                connectButton.setText(R.string.status_connect);
+                connectButton.setEnabled(false);
+            });
+
+            // Re-enable scanning/connect after a short delay so the BLE stack stabilizes
+            handler.postDelayed(() -> {
+                canScan = true;
+                runOnUiThread(() -> {
+                    try { connectButton.setEnabled(true); } catch (Exception ignored) {}
+                });
+            }, 1200);
+        }
+    }
+
+    @SuppressLint("MissingPermission")
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
@@ -844,32 +986,73 @@ public class MainActivity extends AppCompatActivity {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     Log.i(TAG, "Successfully connected to " + deviceAddress);
                     gatt.requestMtu(517);//request biggest value
+                    // Mark connection state and allow user to disconnect via the button
+                    isConnected = true;
+                    // reset retry counter on success
+                    gattRetryCount = 0;
                     runOnUiThread(() -> {
-                        connectButton.setText(R.string.status_connected);
-                        connectButton.setEnabled(false);
+                        connectButton.setText(R.string.status_disconnect);
+                        connectButton.setEnabled(true);
                     });
                     gatt.discoverServices();
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     Log.i(TAG, "Successfully disconnected from " + deviceAddress);
+                    // Cleanup and update UI
+                    isConnected = false;
+                    try {
+                        if (gatt != null) {
+                            gatt.close();
+                        }
+                    } catch (Exception ignored) {}
+                    bluetoothGatt = null;
                     runOnUiThread(() -> {
                         for (Pollutant pollutant : pollutantList) {
                             pollutant.setValue("Disconnected");
                         }
-                        pollutantAdapter.notifyDataSetChanged();
+                        refreshPollutantsOnUi();
                         connectButton.setText(R.string.status_connect);
                         connectButton.setEnabled(true);
                     });
                 }
             } else {
                 Log.w(TAG, "Connection error with " + deviceAddress + ". Status: " + status);
+                isConnected = false;
+                try {
+                    if (gatt != null) {
+                        gatt.close();
+                    }
+                } catch (Exception ignored) {}
+                bluetoothGatt = null;
+                // Update UI to disconnected
                 runOnUiThread(() -> {
                     for (Pollutant pollutant : pollutantList) {
                         pollutant.setValue("Disconnected");
                     }
-                    pollutantAdapter.notifyDataSetChanged();
+                    refreshPollutantsOnUi();
                     connectButton.setText(R.string.status_connect);
                     connectButton.setEnabled(true);
                 });
+
+                // If this was a transient GATT error (133), attempt one retry after cleaning up
+                if (status == 133) {
+                    if (gattRetryCount < MAX_GATT_RETRIES) {
+                        gattRetryCount++;
+                        Log.i(TAG, "Encountered status 133 - scheduling one reconnect attempt (#" + gattRetryCount + ")");
+                        // Prevent scanning until we retry
+                        canScan = false;
+                        handler.postDelayed(() -> {
+                            canScan = true;
+                            // start a fresh scan to find device again
+                            startScan();
+                        }, 1000);
+                    } else {
+                        Log.w(TAG, "Max GATT retry attempts reached. Not retrying automatically.");
+                        gattRetryCount = 0;
+                    }
+                } else {
+                    // reset retry counter on other errors
+                    gattRetryCount = 0;
+                }
             }
         }
 
@@ -974,6 +1157,11 @@ public class MainActivity extends AppCompatActivity {
             .putFloat("h2", h2)
             .apply();
 
+                // Ensure the stats poller aligns to the new BLE timestamp so other screens update promptly
+                scheduleStatsPollerAligned();
+                // Notify other components (StatsActivity) that new stats are available so they can refresh immediately
+                LocalBroadcastManager.getInstance(MainActivity.this).sendBroadcast(new Intent("stats-updated"));
+
                 runOnUiThread(() -> {
                     for (Pollutant pollutant : pollutantList) {
                         switch (pollutant.getName()) {
@@ -1006,7 +1194,8 @@ public class MainActivity extends AppCompatActivity {
                                 break;
                         }
                     }
-                    pollutantAdapter.notifyDataSetChanged();
+                refreshPollutantsOnUi();
+                updateAQIStatement(aqi);
                 });
             } else {
                 Log.w(TAG, "Received malformed data packet. Length: " + (data != null ? data.length : 0));
@@ -1014,7 +1203,7 @@ public class MainActivity extends AppCompatActivity {
                     for (Pollutant pollutant : pollutantList) {
                         pollutant.setValue("Error");
                     }
-                    pollutantAdapter.notifyDataSetChanged();
+                    refreshPollutantsOnUi();
                 });
             }
         }
@@ -1097,7 +1286,7 @@ public class MainActivity extends AppCompatActivity {
 
             // Refresh list display
             if (pollutantAdapter != null) {
-                pollutantAdapter.notifyDataSetChanged();
+                refreshPollutantsOnUi();
             }
             return true;
         }

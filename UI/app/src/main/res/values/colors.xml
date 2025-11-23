@@ -6,4 +6,6 @@
     <color name="primary_blue">#2196F3</color>
     <color name="primary_dark_blue">#1976D2</color>
     <color name="accent_green">#4CAF50</color>
+    <!-- Launcher background color used by the adaptive icon. Change to match your branding. -->
+    <color name="launcher_background">#FFFFFFFF</color>
 </resources>

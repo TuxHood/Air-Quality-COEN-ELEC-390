@@ -2,8 +2,12 @@ package com.example.ui_coen390;
 
 import android.annotation.SuppressLint;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -37,6 +41,7 @@ public class StatsActivity extends AppCompatActivity {
 
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private Runnable mTimer;
+    private BroadcastReceiver statsUpdateReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,6 +100,15 @@ public class StatsActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // register receiver to get immediate updates when data is written elsewhere
+        statsUpdateReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                // immediate refresh when stats are updated by BLE or mock paths
+                updateGraphs();
+            }
+        };
+        LocalBroadcastManager.getInstance(this).registerReceiver(statsUpdateReceiver, new IntentFilter("stats-updated"));
         mTimer = new Runnable() {
             @Override
             public void run() {
@@ -104,21 +118,14 @@ public class StatsActivity extends AppCompatActivity {
             }
         };
 
-        // Update immediately so UI isn't empty, then schedule next run aligned with mock timestamp
+        // Update immediately so UI isn't empty, then schedule next run aligned to global clock
         updateGraphs();
         try {
             long intervalMs = 5000L;
-            android.content.SharedPreferences stats = getSharedPreferences("stats", MODE_PRIVATE);
-            long tsSec = stats.getLong("timestamp", 0L);
-            if (tsSec <= 0L) {
-                mHandler.postDelayed(mTimer, intervalMs);
-            } else {
-                long nowMs = System.currentTimeMillis();
-                long lastMs = tsSec * 1000L;
-                long elapsed = nowMs - lastMs;
-                long delay = elapsed >= intervalMs ? 0L : (intervalMs - elapsed);
-                mHandler.postDelayed(mTimer, delay);
-            }
+            long delay = PollingUtils.computeNextDelay(intervalMs);
+            // computeNextDelay returns intervalMs when now is exactly on a boundary,
+            // which means schedule the next run intervalMs later (no double-run).
+            mHandler.postDelayed(mTimer, delay);
         } catch (Exception e) {
             mHandler.postDelayed(mTimer, 5000);
         }
@@ -127,6 +134,7 @@ public class StatsActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         mHandler.removeCallbacks(mTimer);
+        try { LocalBroadcastManager.getInstance(this).unregisterReceiver(statsUpdateReceiver); } catch (Exception ignored) {}
         super.onPause();
     }
 
@@ -296,6 +304,25 @@ public class StatsActivity extends AppCompatActivity {
             ((android.widget.TextView) findViewById(R.id.textAlcohol)).setText(String.format("%.0f ppb", latest.getAlcohol()));
             ((android.widget.TextView) findViewById(R.id.textMethane)).setText(String.format("%.0f ppb", latest.getMethane()));
             ((android.widget.TextView) findViewById(R.id.textH2)).setText(String.format("%.0f ppb", latest.getH2()));
+
+            // Persist latest reading to SharedPreferences so MainActivity/home UI stays in sync
+            try {
+                long ts = latest.getTimestamp();
+                getSharedPreferences("stats", MODE_PRIVATE).edit()
+                        .putLong("timestamp", ts)
+                        .putFloat("co2", latest.getCo2())
+                        .putFloat("tvoc", latest.getTvoc())
+                        .putFloat("aqi", latestAqi)
+                        .putFloat("propane", latest.getPropane())
+                        .putFloat("co", latest.getCo())
+                        .putFloat("smoke", latest.getSmoke())
+                        .putFloat("alcohol", latest.getAlcohol())
+                        .putFloat("methane", latest.getMethane())
+                        .putFloat("h2", latest.getH2())
+                        .apply();
+            } catch (Exception e) {
+                Log.w("STATS", "Failed to persist latest stats: " + e.getMessage());
+            }
 
         }
     }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background can be a color or a drawable. Use a solid color that matches your brand. -->
+    <background android:drawable="@color/launcher_background" />
+    <!-- Foreground references a padded wrapper so the logo isn't visually cropped on launcher. -->
+    <foreground android:drawable="@drawable/ic_aqi_foreground" />
+</adaptive-icon>
